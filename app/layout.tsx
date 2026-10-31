@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { ClientAppProvider } from '@/components/ClientAppProvider';
 
 export const metadata: Metadata = {
   title: 'Classifieds V2 — Leading Verified Marketplace & Classifieds',
@@ -26,8 +27,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased font-sans selection:bg-emerald-500 selection:text-white" suppressHydrationWarning>
-        {children}
+      <body
+        className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased font-sans selection:bg-emerald-500 selection:text-white"
+        suppressHydrationWarning
+      >
+        <ClientAppProvider>{children}</ClientAppProvider>
       </body>
     </html>
   );

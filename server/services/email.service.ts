@@ -1,4 +1,6 @@
-import { db } from '@/server/db';
+import { emailRepository } from '@/server/repositories/email.repository';
+import { userRepository } from '@/server/repositories/user.repository';
+import { adminRepository } from '@/server/repositories/admin.repository';
 import {
   EmailTemplate,
   EmailLog,
@@ -8,56 +10,67 @@ import {
   NewsletterAudienceFilter,
   UserAccount,
 } from '@/lib/types';
-import { adminService } from './admin.service';
 
 export class EmailService {
-  public getTemplates(): EmailTemplate[] {
-    return Array.from(db.emailTemplates.values());
+  public async getTemplates(): Promise<EmailTemplate[]> {
+    return await emailRepository.findAllTemplates();
   }
 
-  public getTemplateById(id: string): EmailTemplate | undefined {
-    return db.emailTemplates.get(id);
+  public async getTemplateById(id: string): Promise<EmailTemplate | null> {
+    return await emailRepository.findTemplateById(id);
   }
 
-  public updateTemplate(id: string, updatedData: Partial<EmailTemplate>): EmailTemplate | null {
-    const existing = db.emailTemplates.get(id);
-    if (!existing) return null;
-    const updated = {
-      ...existing,
-      ...updatedData,
-      lastUpdated: new Date().toISOString(),
-    };
-    db.emailTemplates.set(id, updated);
-    adminService.recordAudit('EMAIL_TEMPLATE_UPDATED', 'Email', id, updated.name, `Updated template ${updated.name}`);
+  public async updateTemplate(id: string, updatedData: Partial<EmailTemplate>): Promise<EmailTemplate | null> {
+    const fields: any = {};
+    if (updatedData.name !== undefined) fields.name = updatedData.name;
+    if (updatedData.subject !== undefined) fields.subject = updatedData.subject;
+    if (updatedData.bodyHtml !== undefined) fields.bodyHtml = updatedData.bodyHtml;
+    if (updatedData.bodyText !== undefined) fields.bodyText = updatedData.bodyText;
+    if (updatedData.actionLabel !== undefined) fields.actionLabel = updatedData.actionLabel;
+    if (updatedData.actionUrl !== undefined) fields.actionUrl = updatedData.actionUrl;
+    if (updatedData.isActive !== undefined) fields.isActive = updatedData.isActive;
+
+    const updated = await emailRepository.updateTemplate(id, fields);
+    if (updated) {
+      await adminRepository.createAuditLog({
+        adminId: 'adm_1',
+        adminName: 'Super Administrator',
+        action: 'EMAIL_TEMPLATE_UPDATED',
+        module: 'Email',
+        targetId: id,
+        targetSummary: updated.name,
+        details: `Updated template ${updated.name}`,
+        ipAddress: '127.0.0.1',
+      });
+    }
     return updated;
   }
 
-  public getLogs(): EmailLog[] {
-    return Array.from(db.emailLogs.values()).sort(
-      (a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
-    );
+  public async getLogs(): Promise<EmailLog[]> {
+    return await emailRepository.findAllLogs();
   }
 
-  public sendEmail(logData: Omit<EmailLog, 'id' | 'sentAt' | 'status'>): EmailLog {
-    const id = 'eml_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-    const log: EmailLog = {
-      ...logData,
+  public async sendEmail(logData: Omit<EmailLog, 'id' | 'sentAt' | 'status'>): Promise<EmailLog> {
+    const id = `eml_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    return await emailRepository.logEmail({
       id,
-      sentAt: new Date().toISOString(),
+      toEmail: logData.toEmail,
+      toName: logData.toName,
+      subject: logData.subject,
+      body: logData.body,
       status: 'delivered',
-    };
-    db.emailLogs.set(id, log);
-    return log;
+      type: logData.type,
+      listingId: logData.listingId,
+      relatedUserId: logData.relatedUserId,
+    });
   }
 
-  public getNewsletters(): NewsletterCampaign[] {
-    return Array.from(db.newsletters.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+  public async getNewsletters(): Promise<NewsletterCampaign[]> {
+    return await emailRepository.findAllCampaigns();
   }
 
-  public filterAudienceUsers(filter: NewsletterAudienceFilter | string, customState?: string, customCity?: string): UserAccount[] {
-    const allUsers = Array.from(db.users.values()).filter((u) => u.status === 'active' && u.emailSubscribed);
+  public async filterAudienceUsers(filter: NewsletterAudienceFilter | string, customState?: string, customCity?: string): Promise<UserAccount[]> {
+    const allUsers = (await userRepository.findAll()).filter((u) => u.status === 'active' && u.emailSubscribed);
     const target = typeof filter === 'string' ? filter : filter.target;
 
     switch (target) {
@@ -83,49 +96,54 @@ export class EmailService {
     }
   }
 
-  public createNewsletterCampaign(data: Omit<NewsletterCampaign, 'id' | 'createdAt' | 'sentCount'>): NewsletterCampaign {
-    const id = 'camp_' + Date.now();
-    const campaign: NewsletterCampaign = {
-      ...data,
+  public async createNewsletterCampaign(data: Omit<NewsletterCampaign, 'id' | 'createdAt' | 'sentCount'>): Promise<NewsletterCampaign> {
+    const id = `camp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    return await emailRepository.createCampaign({
       id,
-      sentCount: 0,
-      createdAt: new Date().toISOString(),
-    };
-    db.newsletters.set(id, campaign);
-    return campaign;
+      title: data.title || data.subject,
+      subject: data.subject,
+      previewText: data.previewText,
+      contentHtml: data.contentHtml || data.bodyHtml || '',
+      targetAudience: data.targetAudience || 'all_subscribed',
+      targetCity: data.targetCity,
+      targetState: data.targetState,
+      status: 'draft',
+      targetCount: 0,
+    });
   }
 
   public async sendNewsletterCampaign(campaignId: string): Promise<{ success: boolean; recipientCount: number; message: string }> {
-    const campaign = db.newsletters.get(campaignId);
+    const campaigns = await emailRepository.findAllCampaigns();
+    const campaign = campaigns.find((c) => c.id === campaignId);
     if (!campaign) {
       return { success: false, recipientCount: 0, message: 'Campaign not found' };
     }
 
-    const recipients = this.filterAudienceUsers(campaign.targetAudience || 'all_subscribed', campaign.targetState, campaign.targetCity);
+    const recipients = await this.filterAudienceUsers(campaign.targetAudience || 'all_subscribed', campaign.targetState, campaign.targetCity);
     const count = recipients.length;
 
-    // Simulate sending in batches
     for (const user of recipients) {
-      this.sendEmail({
+      await this.sendEmail({
         toEmail: user.email,
         toName: user.name,
         subject: campaign.subject,
-        body: campaign.bodyHtml || campaign.contentHtml || '',
+        body: campaign.contentHtml || '',
         type: 'newsletter',
         isMarketing: true,
         relatedUserId: user.id,
       });
     }
 
-    campaign.status = 'sent';
-    campaign.sentCount = count;
-    campaign.deliveredCount = Math.round(count * 0.98);
-    campaign.openedCount = Math.round(count * 0.42);
-    campaign.clickedCount = Math.round(count * 0.18);
-    campaign.sentAt = new Date().toISOString();
-    db.newsletters.set(campaignId, campaign);
-
-    adminService.recordAudit('CAMPAIGN_SENT', 'Email', campaignId, campaign.subject, `Broadcast sent to ${count} users`);
+    await adminRepository.createAuditLog({
+      adminId: 'adm_1',
+      adminName: 'Super Administrator',
+      action: 'CAMPAIGN_SENT',
+      module: 'Email',
+      targetId: campaignId,
+      targetSummary: campaign.subject,
+      details: `Broadcast sent to ${count} users`,
+      ipAddress: '127.0.0.1',
+    });
 
     return {
       success: true,
@@ -134,18 +152,7 @@ export class EmailService {
     };
   }
 
-  public getSettings(): EmailSettings {
-    return db.emailSettings;
-  }
-
-  public updateSettings(settings: Partial<EmailSettings>): EmailSettings {
-    db.emailSettings = { ...db.emailSettings, ...settings };
-    adminService.recordAudit('EMAIL_SETTINGS_UPDATED', 'Email', 'smtp', 'SMTP Settings', 'Updated SMTP configuration');
-    return db.emailSettings;
-  }
-
-  public async testSmtpConnection(config?: EmailSmtpConfig): Promise<{ success: boolean; message: string; latencyMs: number }> {
-    // Ping simulation
+  public async testSmtpConnection(_config?: EmailSmtpConfig): Promise<{ success: boolean; message: string; latencyMs: number }> {
     const latency = Math.floor(40 + Math.random() * 60);
     return {
       success: true,

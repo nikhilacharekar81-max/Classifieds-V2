@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { boostService } from '@/server/services/boost.service';
+import { getAuthenticatedUser } from '@/lib/auth/session';
 
 export async function POST(req: NextRequest) {
   try {
-    const { listingId, packageId, userId, userName } = await req.json();
-    if (!listingId || !packageId || !userId) {
+    const authContext = await getAuthenticatedUser(req);
+    if (!authContext) {
+      return NextResponse.json({ error: 'Unauthorized: Authentication required to boost an ad' }, { status: 401 });
+    }
+
+    const { listingId, packageId } = await req.json();
+    if (!listingId || !packageId) {
       return NextResponse.json(
-        { error: 'listingId, packageId, and userId are required' },
+        { error: 'listingId and packageId are required' },
         { status: 400 }
       );
     }
 
+    // Derive userId strictly from verified server session
     const result = await boostService.createBoostOrder({
       listingId,
       packageId,
-      userId,
-      userName,
+      userId: authContext.userId,
     });
 
     if (!result.success) {
@@ -24,6 +30,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result.order, { status: 201 });
   } catch (err: any) {
+    console.error('API /api/boost/create-order error:', err);
     return NextResponse.json({ error: err.message || 'Error creating boost order' }, { status: 500 });
   }
 }

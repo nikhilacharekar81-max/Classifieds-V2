@@ -1,4 +1,3 @@
-import { AppProvider } from '@/context/AppContext';
 import { AppClientRouter } from '@/components/AppClientRouter';
 import { listingService } from '@/server/services/listing.service';
 import type { Metadata } from 'next';
@@ -9,7 +8,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const listing = listingService.getListingById(id);
+  const listing = await listingService.getListingById(id);
 
   if (!listing) {
     return {
@@ -37,9 +36,5 @@ export async function generateMetadata({
 }
 
 export default function ItemDetailPage() {
-  return (
-    <AppProvider>
-      <AppClientRouter />
-    </AppProvider>
-  );
+  return <AppClientRouter />;
 }

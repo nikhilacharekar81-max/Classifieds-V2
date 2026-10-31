@@ -30,7 +30,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // Dynamic city routes
-  const locations = adminService.getLocations().filter((l) => l.type === 'city');
+  const allLocations = await adminService.getLocations();
+  const locations = allLocations.filter((l) => l.type === 'city');
   const cityRoutes: MetadataRoute.Sitemap = locations.map((city) => {
     const citySlug = slugify(city.name);
     const geoId = getCityGeoId(city.name);
@@ -43,7 +44,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   });
 
   // Dynamic category routes
-  const categories = adminService.getCategories().filter((c) => c.parentId === null);
+  const allCategories = await adminService.getCategories();
+  const categories = allCategories.filter((c) => c.parentId === null);
   const categoryRoutes: MetadataRoute.Sitemap = categories.map((cat) => ({
     url: `${baseUrl}/all-india/${cat.slug}`,
     lastModified: now,
@@ -52,7 +54,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   // Approved listings
-  const { items: listings } = listingService.getMarketplaceListings({ limit: 100 });
+  const { items: listings } = await listingService.getMarketplaceListings({ limit: 100 });
   const listingRoutes: MetadataRoute.Sitemap = listings.map((l) => ({
     url: `${baseUrl}/item/${l.id}`,
     lastModified: new Date(l.createdAt || now),

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
-import { INITIAL_LISTINGS } from '@/lib/data/initialData';
-import { findListingById, stripChillySuffixes } from '@/lib/utils/seoAndUrlHelper';
+import { listingRepository } from '@/server/repositories/listing.repository';
+import { stripChillySuffixes } from '@/lib/utils/seoAndUrlHelper';
 import { AppClientRouter } from '@/components/AppClientRouter';
+import { notFound } from 'next/navigation';
 
 interface ListingPageProps {
   params: Promise<{ city: string; category: string; listingSlug: string }>;
@@ -11,14 +12,18 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
   const { city, category, listingSlug } = await params;
   const { itemId } = stripChillySuffixes(listingSlug);
 
-  // Try finding the listing from seeded listings
-  const listing = itemId ? findListingById(INITIAL_LISTINGS, itemId) : INITIAL_LISTINGS[0];
+  // Authoritative PostgreSQL query
+  const listing = itemId ? await listingRepository.findById(itemId) : null;
+  if (!listing) {
+    return {
+      title: 'Listing Not Found | Classifieds V2',
+      description: 'The requested classified ad could not be found or has expired.',
+    };
+  }
 
-  const title = listing ? `${listing.title} — For Sale in ${listing.location?.city || city}` : 'Classified Listing';
-  const description = listing
-    ? `${listing.title}. Price: ₹${listing.price.toLocaleString()}. Located in ${listing.location?.city || city}. ${listing.description.slice(0, 150)}...`
-    : 'View listing details on Classifieds.';
-  const imageUrl = listing?.images?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80';
+  const title = `${listing.title} — ₹${listing.price.toLocaleString('en-IN')} in ${listing.location.city} | Classifieds V2`;
+  const description = `${listing.title}. Price: ₹${listing.price.toLocaleString('en-IN')}. Located in ${listing.location.locality}, ${listing.location.city}. ${listing.description.slice(0, 150)}...`;
+  const imageUrl = listing.images?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80';
 
   return {
     title,
@@ -32,7 +37,7 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
           url: imageUrl,
           width: 1200,
           height: 630,
-          alt: listing?.title || 'Listing Image',
+          alt: listing.title,
         },
       ],
     },
@@ -51,8 +56,11 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
 export default async function ListingHierarchicalPage({ params }: ListingPageProps) {
   const { city, category, listingSlug } = await params;
   const { itemId } = stripChillySuffixes(listingSlug);
-  const listing = itemId ? findListingById(INITIAL_LISTINGS, itemId) : INITIAL_LISTINGS[0];
 
+  // Authoritative PostgreSQL fetch
+  const listing = itemId ? await listingRepository.findById(itemId) : null;
+
+  // Schema.org structured data for Google Rich Results
   const jsonLd = listing
     ? {
         '@context': 'https://schema.org/',
@@ -82,12 +90,20 @@ export default async function ListingHierarchicalPage({ params }: ListingPagePro
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       )}
-      <div className="sr-only" aria-hidden="true">
-        <h1>{listing ? listing.title : 'Listing Details'}</h1>
-        <p>{listing?.description}</p>
-        <div>Price: ₹{listing?.price.toLocaleString()}</div>
-        <div>Location: {listing?.location?.locality}, {listing?.location?.city}</div>
-      </div>
+
+      {/* Semantic Server-Rendered HTML for Crawlers */}
+      {listing && (
+        <article className="sr-only" aria-label={listing.title}>
+          <h1>{listing.title}</h1>
+          <p>{listing.description}</p>
+          <div>Price: ₹{listing.price.toLocaleString('en-IN')}</div>
+          <div>Location: {listing.location.locality}, {listing.location.city}, {listing.location.state}</div>
+          <div>Seller: {listing.sellerName}</div>
+          <div>Status: {listing.status}</div>
+        </article>
+      )}
+
+      {/* Interactive Marketplace Interface */}
       <AppClientRouter />
     </>
   );

@@ -6,6 +6,9 @@ export interface CmsPage {
   content: string;
   updatedAt: string;
   status: 'published' | 'draft';
+  seoTitle?: string;
+  seoDescription?: string;
+  isActive?: boolean;
 }
 
 export type Role = 'super_admin' | 'moderator' | 'support_agent' | 'finance_user' | 'content_manager' | 'marketing_manager';
@@ -73,6 +76,7 @@ export interface CustomFieldDefinition {
   required: boolean;
   unit?: string;
   filterable: boolean;
+  orderIndex?: number;
 }
 
 export interface Listing {
@@ -130,6 +134,7 @@ export interface Category {
   listingCount: number;
   isActive: boolean;
   order: number;
+  orderIndex?: number;
   seoTitle?: string;
   seoDescription?: string;
   isPaid?: boolean;
@@ -141,10 +146,16 @@ export interface LocationItem {
   id: string;
   type: 'country' | 'state' | 'city' | 'locality';
   name: string;
+  slug?: string;
   code?: string;
+  geoId?: string;
   parentId: string | null;
+  latitude?: number;
+  longitude?: number;
   popular?: boolean;
   listingCount: number;
+  order?: number;
+  orderIndex?: number;
 }
 
 export interface ReportItem {

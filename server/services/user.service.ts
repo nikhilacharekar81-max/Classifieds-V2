@@ -1,10 +1,11 @@
-import { db } from '@/server/db';
+import { userRepository } from '@/server/repositories/user.repository';
+import { favoriteRepository } from '@/server/repositories/favorite.repository';
+import { adminRepository } from '@/server/repositories/admin.repository';
 import { UserAccount, KycStatus } from '@/lib/types';
-import { adminService } from './admin.service';
 
 export class UserService {
-  public getUsers(filter: string = 'all'): UserAccount[] {
-    const all = Array.from(db.users.values());
+  public async getUsers(filter: string = 'all'): Promise<UserAccount[]> {
+    const all = await userRepository.findAll();
     if (filter === 'regular' || filter === 'users') {
       return all.filter((u) => u.type === 'user');
     }
@@ -20,98 +21,100 @@ export class UserService {
     return all;
   }
 
-  public getUserById(id: string): UserAccount | undefined {
-    return db.users.get(id);
+  public async getUserById(id: string): Promise<UserAccount | null> {
+    return await userRepository.findById(id);
   }
 
-  public updateUser(id: string, updatedData: Partial<UserAccount>): UserAccount | null {
-    const existing = db.users.get(id);
-    if (!existing) return null;
-    const updated: UserAccount = { ...existing, ...updatedData };
-    db.users.set(id, updated);
-    return updated;
-  }
-
-  public banUser(userId: string, reason: string): boolean {
-    const user = db.users.get(userId);
-    if (!user) return false;
-    user.status = 'banned';
-    db.users.set(userId, user);
-
-    // Reject or suspend all active listings of banned user
-    for (const [lId, listing] of db.listings.entries()) {
-      if (listing.sellerId === userId && listing.status === 'approved') {
-        listing.status = 'rejected';
-        listing.rejectionReason = `Seller account suspended: ${reason}`;
-        db.listings.set(lId, listing);
-      }
+  public async updateUser(id: string, updatedData: Partial<UserAccount>): Promise<UserAccount | null> {
+    const fields: any = {};
+    if (updatedData.name !== undefined) fields.name = updatedData.name;
+    if (updatedData.phone !== undefined) fields.phone = updatedData.phone;
+    const anyData = updatedData as any;
+    if (updatedData.businessDetails?.companyName !== undefined || anyData.businessName !== undefined) {
+      fields.businessName = updatedData.businessDetails?.companyName ?? anyData.businessName;
+    }
+    if (updatedData.businessDetails?.gstNumber !== undefined || anyData.gstNumber !== undefined) {
+      fields.gstNumber = updatedData.businessDetails?.gstNumber ?? anyData.gstNumber;
+    }
+    if (updatedData.businessDetails?.verifiedBusiness !== undefined || anyData.verifiedBusiness !== undefined) {
+      fields.verifiedBusiness = updatedData.businessDetails?.verifiedBusiness ?? anyData.verifiedBusiness;
+    }
+    if (updatedData.location) {
+      if (updatedData.location.city) fields.city = updatedData.location.city;
+      if (updatedData.location.state) fields.state = updatedData.location.state;
     }
 
-    adminService.recordAudit('USER_BANNED', 'Users', userId, user.name, `Banned user with reason: ${reason}`);
+    return await userRepository.update(id, fields);
+  }
+
+  public async banUser(userId: string, reason: string): Promise<boolean> {
+    const user = await userRepository.findById(userId);
+    if (!user) return false;
+
+    await userRepository.update(userId, { status: 'banned' });
+
+    await adminRepository.createAuditLog({
+      adminId: 'adm_1',
+      adminName: 'Super Administrator',
+      action: 'USER_BANNED',
+      module: 'Users',
+      targetId: userId,
+      targetSummary: user.name,
+      details: `Banned user with reason: ${reason}`,
+      ipAddress: '127.0.0.1',
+    });
+
     return true;
   }
 
-  public unbanUser(userId: string): boolean {
-    const user = db.users.get(userId);
+  public async unbanUser(userId: string): Promise<boolean> {
+    const user = await userRepository.findById(userId);
     if (!user) return false;
-    user.status = 'active';
-    db.users.set(userId, user);
-    adminService.recordAudit('USER_UNBANNED', 'Users', userId, user.name, 'Unbanned user');
+
+    await userRepository.update(userId, { status: 'active' });
+
+    await adminRepository.createAuditLog({
+      adminId: 'adm_1',
+      adminName: 'Super Administrator',
+      action: 'USER_UNBANNED',
+      module: 'Users',
+      targetId: userId,
+      targetSummary: user.name,
+      details: 'Unbanned user',
+      ipAddress: '127.0.0.1',
+    });
+
     return true;
   }
 
-  public verifyKyc(userId: string, status: 'verified' | 'rejected', notes?: string): boolean {
-    const user = db.users.get(userId);
+  public async verifyKyc(userId: string, status: 'verified' | 'rejected', notes?: string): Promise<boolean> {
+    const user = await userRepository.findById(userId);
     if (!user) return false;
-    user.kycStatus = status as KycStatus;
-    db.users.set(userId, user);
 
-    adminService.recordAudit(
-      status === 'verified' ? 'KYC_APPROVED' : 'KYC_REJECTED',
-      'Users',
-      userId,
-      user.name,
-      notes || `KYC status changed to ${status}`
-    );
-    return true;
-  }
+    await userRepository.updateKycStatus(userId, status, notes);
 
-  public submitKycDocument(
-    userId: string,
-    doc: { type: 'Aadhaar' | 'PAN' | 'GSTIN' | 'Passport'; docNumber: string; fileUrl: string }
-  ): boolean {
-    const user = db.users.get(userId);
-    if (!user) return false;
-    user.kycStatus = 'pending';
-    user.kycDocument = {
-      type: doc.type,
-      docNumber: doc.docNumber,
-      fileUrl: doc.fileUrl,
-      submittedAt: new Date().toISOString(),
-    };
-    db.users.set(userId, user);
+    await adminRepository.createAuditLog({
+      adminId: 'adm_1',
+      adminName: 'Super Administrator',
+      action: status === 'verified' ? 'KYC_APPROVED' : 'KYC_REJECTED',
+      module: 'Users',
+      targetId: userId,
+      targetSummary: user.name,
+      details: notes || `KYC status changed to ${status}`,
+      ipAddress: '127.0.0.1',
+    });
+
     return true;
   }
 
   // Favorites
-  public getFavorites(userId: string): string[] {
-    const set = db.favorites.get(userId);
-    return set ? Array.from(set) : [];
+  public async getFavorites(userId: string): Promise<string[]> {
+    return await favoriteRepository.getUserFavorites(userId);
   }
 
-  public toggleFavorite(userId: string, listingId: string): boolean {
-    let set = db.favorites.get(userId);
-    if (!set) {
-      set = new Set();
-      db.favorites.set(userId, set);
-    }
-    if (set.has(listingId)) {
-      set.delete(listingId);
-      return false; // now un-favorited
-    } else {
-      set.add(listingId);
-      return true; // now favorited
-    }
+  public async toggleFavorite(userId: string, listingId: string): Promise<boolean> {
+    const res = await favoriteRepository.toggleFavorite(userId, listingId);
+    return res.isFavorited;
   }
 }
 

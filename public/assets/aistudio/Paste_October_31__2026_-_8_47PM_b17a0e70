@@ -1,0 +1,985 @@
+# CLASSIFIEDS V2 — COMPLETE BACKEND, SECURITY, DATABASE, SSR AND ARCHITECTURE CORRECTION
+
+## EXECUTION INSTRUCTIONS
+
+Work directly on the existing Classifieds V2 codebase:
+
+Repository: `nikhilacharekar81-max/Classifieds-V2`
+
+This is an implementation task, not an architecture proposal or another general audit.
+
+Implement the confirmed corrections described below in the current codebase. Do not stop after producing a plan. Do not merely describe what should be changed. Make the actual code changes, create necessary database migrations, implement the required backend functionality, and verify the resulting application.
+
+You may inspect relevant source files and their callers to understand dependencies and avoid breaking existing functionality. Keep the implementation focused on the confirmed issues and their necessary dependencies.
+
+**Testing is REQUIRED.** Create or update appropriate tests, run them, investigate failures, fix genuine implementation problems, and rerun the affected tests. Also run the production build and relevant type checks where supported. Do not hide, skip, or misrepresent failures.
+
+---
+
+# NON-NEGOTIABLE REQUIREMENTS
+
+### 1. Preserve the existing application
+
+Do not remove, simplify, redesign, or replace existing features merely to make the implementation easier.
+
+Preserve:
+
+- Existing public marketplace functionality.
+- Existing listing creation, editing, publishing, moderation, renewal, deletion and search workflows.
+- Existing hierarchical SEO URLs.
+- Existing user, seller and administrator workflows.
+- Existing authentication and account functionality, correcting security defects without unnecessarily restricting legitimate users.
+- Existing boost packages and payment-related UI.
+- Existing advanced Admin Panel and its functionality.
+- Existing visual design, layout, navigation, cards, tables, filters, modals and interactions.
+
+### 2. Preserve all 15 Admin Panel modules
+
+All existing modules must remain available and functional:
+
+1. Dashboard
+2. Listings
+3. Categories
+4. Attributes
+5. Locations
+6. Users
+7. Moderation
+8. Paid Features
+9. Commerce
+10. Advertising
+11. Communication
+12. CMS / SEO
+13. Analytics
+14. Admin Settings
+15. Email Management
+
+Do not replace these modules with a generic dashboard.
+
+Preserve their existing advanced controls, CRUD operations, search, filtering, bulk actions, configuration, dialogs, modals and workflows.
+
+Where an existing control currently updates only React state, connect it to the authoritative backend and persistent database while preserving its existing UI.
+
+A module is not complete merely because its component renders. Its actual operations must work and persist correctly.
+
+### 3. Required technology architecture
+
+Maintain:
+
+- Next.js App Router.
+- React.
+- TypeScript.
+- Node.js runtime.
+- PostgreSQL as the authoritative persistent database.
+- Drizzle ORM or the existing appropriate database abstraction.
+- Modular monolith architecture.
+
+Do not introduce unnecessary microservices.
+
+PostgreSQL must be the source of truth for persistent application data.
+
+---
+
+# PHASE 1 — ESTABLISH REAL POSTGRESQL PERSISTENCE
+
+## Problem confirmed in the existing implementation
+
+The current `server/db.ts` contains an in-memory `DatabaseEngine` using JavaScript Maps and Sets.
+
+Services read and modify these collections. Initial data is loaded from `INITIAL_*` constants. The Drizzle schema exists, but it is not the authoritative runtime persistence layer.
+
+The repository also lacks the demonstrated PostgreSQL driver, complete migration infrastructure and domain repository layer.
+
+This must be corrected.
+
+## 1.1 Implement the real PostgreSQL connection
+
+Inspect and correct:
+
+- `server/db.ts`
+- `lib/db/schema.ts`
+- `package.json`
+- `.env.example`
+
+Implement:
+
+- A real PostgreSQL driver compatible with the selected Drizzle configuration.
+- A single reusable server-side database connection/pool.
+- A proper `DATABASE_URL` configuration.
+- Safe connection handling and error propagation.
+- Server-only database access.
+- Environment validation that fails clearly when required production configuration is missing.
+
+Do not silently fall back to an in-memory database when PostgreSQL is unavailable.
+
+Do not report successful persistence when operations are only modifying JavaScript Maps.
+
+## 1.2 Remove the in-memory database as the persistent source of truth
+
+Replace the current `DatabaseEngine` implementation and all persistent Map/Set-based domain storage with PostgreSQL-backed repositories.
+
+Search all relevant services and routes for operations such as:
+
+- `db.listings.values()`
+- `db.listings.set()`
+- `db.users`
+- `db.categories`
+- `db.transactions`
+- `db.packages`
+- `db.admins`
+- `db.auditLogs`
+- Other persistent Maps or Sets.
+
+Replace these with appropriate database queries and transactions.
+
+In-memory data may only be used for genuinely temporary, non-authoritative computation or caching with an explicit invalidation strategy.
+
+Do not retain the old in-memory implementation alongside the new PostgreSQL implementation.
+
+There must be one authoritative persistence path.
+
+## 1.3 Create complete database migrations
+
+Create the migration infrastructure and actual migration files.
+
+The migrations must create and maintain the database schema required by the application.
+
+Do not assume that defining Drizzle schema objects automatically creates production tables.
+
+Include:
+
+- Primary keys.
+- Foreign keys.
+- Appropriate deletion behavior.
+- Unique constraints.
+- Required indexes.
+- Status constraints where appropriate.
+- Timestamp fields.
+- Database transaction support.
+- Appropriate monetary precision.
+- Durable relationships between users, listings, boosts, payments and administrative records.
+
+Use collision-resistant identifiers for listings and other entities. Remove the current random 4-digit listing ID generation.
+
+Do not use destructive migrations that unnecessarily erase existing data.
+
+Where existing data must be migrated, preserve it through a deliberate migration strategy.
+
+## 1.4 Complete persistence for Admin Panel domains
+
+Inspect the existing 15 Admin modules and their actual data requirements.
+
+The existing schema must be expanded wherever necessary.
+
+Ensure persistent storage exists for all data actually managed by the existing application, including where applicable:
+
+- Users and roles.
+- Listings and listing attributes.
+- Categories and custom fields.
+- Locations.
+- Moderation records and reports.
+- Paid feature packages and boost orders.
+- Payment transactions and webhook events.
+- Advertising campaigns.
+- Communication messages.
+- CMS pages and SEO configuration.
+- Email templates and email logs.
+- Newsletter or campaign records.
+- Admin settings.
+- Audit logs.
+- Admin sessions and impersonation records.
+- Other existing Admin Panel configuration and operational records.
+
+Do not create unnecessary tables for imaginary features. Derive the required schema from the actual existing modules and workflows.
+
+Do not leave important Admin Panel data as hardcoded `INITIAL_*` arrays.
+
+## 1.5 Implement domain repositories
+
+Establish a clear repository layer for each relevant domain.
+
+Examples:
+
+- User repository.
+- Listing repository.
+- Category repository.
+- Location repository.
+- Boost repository.
+- Payment repository.
+- Moderation repository.
+- Admin repository.
+- CMS repository.
+- Communication repository.
+- Analytics repository.
+
+Each domain must have one authoritative data-access implementation.
+
+Do not create duplicate old/new repositories or parallel service implementations.
+
+Repositories must handle database access. Services must contain the domain business logic. Route handlers must handle HTTP concerns and authorization.
+
+## 1.6 Transactional integrity
+
+Use PostgreSQL transactions for operations that change multiple related records.
+
+Examples include:
+
+- Listing creation and associated attributes.
+- Listing moderation and status updates.
+- Boost activation after verified payment.
+- Payment transaction creation and webhook processing.
+- Admin actions that update data and create audit records.
+- User deletion or deactivation and associated records.
+
+A failed transaction must not leave partially updated financial or business state.
+
+---
+
+# PHASE 2 — AUTHENTICATION, AUTHORIZATION AND API SECURITY
+
+## Problem confirmed in the existing implementation
+
+The inspected listing API routes do not demonstrate adequate authentication, ownership validation or role authorization.
+
+The caller can submit sensitive fields such as sellerId, status and isFeatured. Update operations merge request data into existing records without a sufficient field allowlist.
+
+These are genuine security vulnerabilities and must be fixed.
+
+## 2.1 Implement server-authoritative authentication
+
+Inspect the existing authentication implementation and preserve legitimate login and account workflows.
+
+Implement reliable server-side session verification.
+
+Never trust:
+
+- A userId supplied in a request body.
+- A role supplied by a browser.
+- A client-side `currentAdmin` value.
+- A client-side role switch.
+- A frontend claim that the user is authenticated.
+
+Every protected server operation must identify the acting user from a verified server-side session.
+
+Use secure cookie/session settings appropriate for production.
+
+Protect session handling against session fixation and unauthorized session reuse.
+
+Do not introduce unnecessary restrictions on legitimate users.
+
+## 2.2 Implement server-side RBAC
+
+Implement role-based authorization on the server.
+
+Every protected operation must verify:
+
+1. The session is valid.
+2. The user is authenticated.
+3. The user has the required permission.
+4. The user owns the resource where ownership is required.
+5. The requested fields are permitted for that role.
+
+Administrative operations must require actual server-verified administrator permissions.
+
+Changing a role in React state must never grant administrative access.
+
+Client-side visibility controls are not security boundaries.
+
+## 2.3 Correct listing APIs
+
+Inspect and correct:
+
+- `app/api/listings/route.ts`
+- `app/api/listings/[id]/route.ts`
+- `server/services/listing.service.ts`
+
+### GET
+
+Public listing queries must expose only listings that are legitimately public and approved.
+
+Do not let anonymous users retrieve pending, rejected, suspended or otherwise private listings by supplying a status query parameter.
+
+Administrative listing queries must use authenticated administrator authorization.
+
+### POST
+
+Listing creation must:
+
+- Require an authenticated user.
+- Derive sellerId from the verified session.
+- Validate all submitted fields.
+- Reject unauthorized sensitive fields.
+- Prevent users from choosing their own moderation status.
+- Prevent users from assigning themselves featured or paid status.
+- Use the appropriate initial moderation/publishing workflow already intended by the application.
+
+Do not automatically approve listings simply because a caller submits `status: "approved"`.
+
+### PUT / PATCH
+
+Listing updates must:
+
+- Require authentication.
+- Verify listing ownership or administrator permission.
+- Use explicit field allowlists.
+- Validate field types, lengths and allowed values.
+- Prevent unauthorized sellerId changes.
+- Prevent unauthorized moderation status changes.
+- Prevent unauthorized featured/boost changes.
+- Preserve legitimate listing editing workflows.
+
+### DELETE
+
+Listing deletion must require verified ownership or authorized administrative permission.
+
+Preserve legitimate seller deletion and administrative moderation workflows.
+
+## 2.4 Audit all other API routes
+
+Do not secure only the two listing endpoints and leave equivalent vulnerabilities elsewhere.
+
+Inspect all API routes, particularly:
+
+- Listing bulk operations.
+- Listing renewal.
+- Boost operations.
+- Admin operations.
+- User management.
+- Moderation.
+- CMS and settings.
+- Communication and email management.
+- Analytics and financial operations.
+
+For every endpoint, establish whether it is public, authenticated, owner-only, moderator-only or administrator-only.
+
+Apply appropriate authorization and field validation.
+
+Do not add unnecessary restrictions to public read-only functionality.
+
+## 2.5 Correct bulk operations
+
+Inspect the bulk listing action endpoint and its frontend callers.
+
+The current implementation has a mismatch where the frontend sends `action: "update"` for bulk renewal while the server supports specific actions such as approve, reject, delete and renew.
+
+Correct the contract consistently.
+
+Ensure bulk operations:
+
+- Validate each requested action.
+- Verify the actor's permissions.
+- Apply ownership rules where appropriate.
+- Use database transactions where required.
+- Return accurate per-item success/failure results.
+- Do not silently report success for failed operations.
+
+---
+
+# PHASE 3 — REAL PAYMENT VERIFICATION AND FINANCIAL INTEGRITY
+
+## Problem confirmed in the existing implementation
+
+The current boost payment flow does not demonstrate genuine gateway verification.
+
+The inspected implementation accepts userId and payment identifiers from the request body, and `verifyAndApplyBoost()` can activate a boost without independently verifying an actual successful gateway payment.
+
+The webhook path also lacks demonstrated signature verification and durable idempotency.
+
+This is a critical financial vulnerability.
+
+## 3.1 Correct boost order creation
+
+Inspect:
+
+- `app/api/boost/create-order/route.ts`
+- `app/api/boost/verify-payment/route.ts`
+- `app/api/boost/webhook/route.ts`
+- `server/services/boost.service.ts`
+
+Boost order creation must:
+
+- Require a verified authenticated user.
+- Derive user identity from the server session.
+- Retrieve the selected package from PostgreSQL.
+- Calculate the payable amount on the server.
+- Create a persistent pending payment/boost order.
+- Use the configured gateway's genuine order-creation API.
+- Store the gateway order reference.
+- Never trust a client-provided amount or user identity.
+
+## 3.2 Genuine gateway verification
+
+A payment must not be considered successful because the frontend says it succeeded.
+
+Implement actual verification using the configured payment gateway's documented server-side verification mechanism.
+
+Where applicable, verify:
+
+- Gateway payment ID.
+- Gateway order ID.
+- Signature or cryptographic proof.
+- Expected amount.
+- Currency.
+- Merchant/account identity.
+- Payment status.
+- Association with the original pending order.
+- Correct user and boost package.
+
+Use secure secret management.
+
+Do not hardcode gateway secrets.
+
+Do not invent a successful payment response or fake a gateway capture.
+
+If no real gateway credentials or provider configuration are available, preserve the pending state and report that genuine payment activation cannot yet be completed. Do not activate a paid boost without confirmed payment.
+
+## 3.3 Webhook signature verification
+
+Implement gateway-specific webhook signature verification.
+
+Reject invalid or missing signatures.
+
+Use the exact raw request body where the gateway requires raw-body signature verification.
+
+Do not trust a JSON body simply because it contains a success status.
+
+## 3.4 Durable webhook idempotency
+
+Replace the in-memory webhook event Set with PostgreSQL-backed durable event storage.
+
+Implement a unique event identity scoped by gateway/provider.
+
+The processing workflow must:
+
+1. Receive the webhook.
+2. Verify its cryptographic signature.
+3. Validate the event structure.
+4. Identify the gateway and event ID.
+5. Check durable idempotency.
+6. Verify the associated payment/order.
+7. Process the financial transition transactionally.
+8. Mark the event successfully processed only after the transaction succeeds.
+
+A failed event must not become permanently marked successful or processed before its business operation commits.
+
+Retries of legitimate events must be safe.
+
+Concurrent duplicate webhook deliveries must not double-credit, double-activate or double-process a payment.
+
+Never use `Date.now()` as a substitute for a missing gateway payment or transaction identifier.
+
+## 3.5 Correct financial transaction defaults
+
+Inspect the `boostTransactions` schema.
+
+Remove unsafe defaults that automatically make a newly created transaction `completed`.
+
+New transactions must start in the appropriate pending state and transition only after verified payment.
+
+All financial status transitions must be server-authoritative and persistent.
+
+## 3.6 Correct expired boost cleanup
+
+Inspect:
+
+`app/api/boost/cleanup-expired/route.ts`
+
+The current public endpoint accepts a caller-supplied `nowMs`, potentially allowing arbitrary expiration of active boosts.
+
+Correct it so:
+
+- Public callers cannot trigger unrestricted cleanup.
+- Cleanup runs through a trusted scheduled/internal mechanism or appropriately authorized administrator operation.
+- Time is calculated on the server.
+- Callers cannot supply arbitrary timestamps.
+- Expiration updates are database-backed and transaction-safe.
+
+Preserve the normal expiration behavior.
+
+---
+
+# PHASE 4 — GENUINE NEXT.JS SSR AND SEO
+
+## Problem confirmed in the existing implementation
+
+The public hierarchical routes exist, but they do not reliably provide genuine database-backed SSR.
+
+The route components use initial/static data for metadata and hidden SEO text instead of rendering actual current listing content.
+
+The custom browser-history router also duplicates Next.js routing.
+
+Additionally, the hierarchical route pages render `AppClientRouter` without the required `AppProvider`, while `useApp()` throws when the provider is missing.
+
+Correct these problems without changing existing public URLs.
+
+## 4.1 Fix the missing provider issue
+
+Inspect:
+
+- `app/[city]/page.tsx`
+- `app/[city]/[category]/page.tsx`
+- `app/[city]/[category]/[listingSlug]/page.tsx`
+- `components/AppClientRouter.tsx`
+- `context/AppContext.tsx`
+- `app/layout.tsx`
+
+Correct the provider architecture.
+
+Do not simply add a client provider everywhere as a shortcut if a public page should be server-rendered.
+
+Use Server Components for public SEO-critical pages wherever possible.
+
+If a client context is genuinely required for an interactive section, isolate that section behind an appropriate client boundary.
+
+All affected routes must render successfully.
+
+## 4.2 Implement genuine database-backed SSR
+
+The following public pages must render meaningful actual content on the server:
+
+- Homepage.
+- City pages.
+- Category pages.
+- Listing detail pages.
+- Seller profile pages where supported by existing functionality.
+
+Fetch data from PostgreSQL through the authoritative repositories/services.
+
+Do not use `INITIAL_*` constants as the production source of public listing content.
+
+The initial HTML response must contain the actual page content, not merely an empty client shell that fills after JavaScript loads.
+
+## 4.3 Preserve hierarchical SEO URLs
+
+Preserve the existing URL structure, including URLs such as:
+
+`/mumbai/electronics/mobile-phones/iphone-15-12345`
+
+The listing ID must remain authoritative.
+
+Slugs must be presentation/SEO elements and must not be trusted as the record identity.
+
+Preserve existing URL compatibility and avoid breaking existing links.
+
+## 4.4 Metadata and structured data
+
+Generate actual database-backed:
+
+- Page titles.
+- Meta descriptions.
+- Canonical URLs.
+- OpenGraph metadata.
+- Twitter metadata.
+- Relevant Schema.org structured data.
+
+Metadata must describe the actual listing, category, city or seller being rendered.
+
+Do not generate metadata from unrelated seed data.
+
+Do not use hidden SEO text or `aria-hidden` blocks as a substitute for real visible server-rendered content.
+
+## 4.5 Remove duplicate routing systems
+
+Inspect:
+
+- `components/AppClientRouter.tsx`
+- `lib/router/useRouter.ts`
+- Other custom history/navigation utilities.
+
+Next.js App Router must be the authoritative routing system.
+
+Remove or refactor the custom browser-history router where it duplicates Next.js navigation.
+
+Migrate its legitimate navigation behavior to Next.js navigation APIs without breaking:
+
+- Existing links.
+- Back/forward navigation.
+- Listing detail navigation.
+- Filters and search.
+- Admin navigation.
+- Modal and interaction workflows.
+
+Do not keep two competing routing implementations.
+
+---
+
+# PHASE 5 — ADMIN PANEL BACKEND COMPLETION AND SINGLE SOURCE OF TRUTH
+
+This phase is essential. Do not treat the presence of 15 Admin module components as proof that the Admin Panel is fully implemented.
+
+Preserve all existing UI and connect its operations to persistent backend functionality.
+
+## 5.1 Remove client-side authority over persistent data
+
+Inspect:
+
+- `context/AppContext.tsx`
+- `server/services/admin.service.ts`
+- All files under `components/admin/`
+- All files under `components/admin/modules/`
+
+React state may manage temporary presentation state, such as an open modal, active tab, selected filter or unsaved form input.
+
+However, persistent operations must go through authenticated server-side operations and PostgreSQL.
+
+Do not let React state be the authoritative record of:
+
+- User roles.
+- Admin permissions.
+- Listing moderation status.
+- Payment state.
+- Boost status.
+- User account status.
+- Admin configuration.
+- Audit history.
+- Other persistent business data.
+
+## 5.2 Correct role switching and impersonation
+
+Inspect current admin role switching and impersonation functionality.
+
+A client-side role switch must never grant real privileges.
+
+If the application has legitimate administrator impersonation, preserve the feature but implement it securely:
+
+- Verify the acting administrator on the server.
+- Create a properly scoped impersonation session.
+- Record the acting administrator and target user.
+- Record start and end times.
+- Enforce permission boundaries.
+- Provide a reliable exit mechanism.
+- Store audit records persistently.
+- Prevent impersonation from being forged through React state or request-body values.
+
+Do not silently remove the existing administrative functionality.
+
+## 5.3 Correct audit logs
+
+Remove hardcoded administrator identity and hardcoded IP values.
+
+Audit records must be generated from trusted server-side context.
+
+Record actual actor identity, action, target, timestamp and relevant request metadata where available.
+
+Persist audit records in PostgreSQL.
+
+Do not allow a client to fabricate audit history.
+
+## 5.4 Complete each existing Admin module
+
+For each of the 15 modules, inspect the existing controls and connect every intended persistent operation to its authoritative backend.
+
+Ensure:
+
+- Create operations persist.
+- Update operations persist.
+- Delete operations persist.
+- Search and filtering use appropriate server/database data.
+- Bulk actions perform actual authorized operations.
+- Configuration changes survive reloads and application restarts.
+- Errors are shown accurately.
+- UI success is not displayed before the server confirms the operation.
+
+Preserve the existing UI and workflow.
+
+Do not replace existing advanced modules with simplified versions.
+
+---
+
+# PHASE 6 — ARCHITECTURAL CONSOLIDATION AND DATA INTEGRITY
+
+The current architecture contains multiple competing sources of truth:
+
+- PostgreSQL schema versus in-memory runtime database.
+- React state versus backend state.
+- Next.js App Router versus custom browser-history router.
+- Client-side admin operations versus server-side service operations.
+- In-memory boost state versus persistent payment records.
+
+Consolidate these.
+
+## Required architecture
+
+Use this responsibility separation:
+
+**Server Components**
+- Public SSR rendering.
+- Server-side data retrieval.
+- Metadata generation.
+
+**Client Components**
+- Interactive UI.
+- Temporary presentation state.
+- User interactions.
+- Calling authorized server operations.
+
+**Route Handlers / Server Actions**
+- Input validation.
+- Authentication.
+- Authorization.
+- HTTP or action boundary.
+- Calling the appropriate service.
+
+**Domain Services**
+- One authoritative implementation of business rules per domain.
+- Transaction orchestration.
+- Business state transitions.
+
+**Repositories**
+- Authoritative PostgreSQL data access.
+- No competing in-memory persistence.
+
+**PostgreSQL**
+- Durable source of truth.
+
+Do not duplicate business rules between frontend, routes, services and repositories.
+
+Do not create old and new implementations that both remain active.
+
+Remove obsolete implementations after their callers have been migrated.
+
+Do not swallow database/API errors and then report success to the user.
+
+---
+
+# PHASE 7 — TESTING AND VERIFICATION (REQUIRED)
+
+Testing must not be excluded.
+
+Create or update tests as necessary to verify the actual corrections.
+
+Do not write superficial tests that only verify that a function exists or a component renders.
+
+Tests must exercise meaningful behavior and security boundaries.
+
+## 7.1 Database tests
+
+Verify:
+
+- PostgreSQL connection works.
+- Migrations apply successfully.
+- Required tables and constraints exist.
+- Create/read/update/delete operations persist.
+- Data survives service reinitialization.
+- Database errors are propagated correctly.
+- Multi-record operations roll back on failure.
+- Concurrent operations do not corrupt state.
+
+Use an appropriate isolated test database or controlled database test environment.
+
+Do not use production data for destructive tests.
+
+## 7.2 Listing API security tests
+
+Test at minimum:
+
+- Anonymous listing creation is rejected.
+- Anonymous listing modification is rejected.
+- Anonymous listing deletion is rejected.
+- Authenticated sellers can create legitimate listings.
+- Seller identity comes from the verified session.
+- A seller cannot modify another seller's listing.
+- A seller cannot assign themselves approved status.
+- A seller cannot assign themselves featured status.
+- A seller cannot change listing ownership.
+- Unauthorized status changes are rejected.
+- Public listing reads do not expose pending or rejected listings.
+- Authorized administrators can perform legitimate moderation.
+- Bulk operations enforce the correct permissions.
+- Bulk renewal uses the correct frontend/backend action contract.
+
+Test both permitted and prohibited cases.
+
+## 7.3 Payment and webhook tests
+
+Test at minimum:
+
+- A client-supplied success value cannot activate a boost.
+- A forged payment signature is rejected.
+- A missing signature is rejected.
+- An incorrect amount is rejected.
+- An incorrect gateway order reference is rejected.
+- A payment belonging to another user cannot activate a boost.
+- A genuinely verified successful payment can activate the correct boost.
+- Failed payments do not activate boosts.
+- Pending payments remain pending.
+- Duplicate webhooks do not double-process.
+- Concurrent duplicate webhooks do not double-process.
+- Failed processing can be retried safely.
+- Event IDs are unique within the correct gateway namespace.
+- Missing gateway identifiers do not produce fabricated payment success.
+- Transaction status changes occur only after genuine verification.
+- Webhook processing and boost activation are transactionally consistent.
+
+Mock gateway responses only within isolated tests. Never use mocks to claim that a real payment gateway is configured or verified in production.
+
+## 7.4 Cleanup endpoint tests
+
+Verify:
+
+- Anonymous users cannot invoke unrestricted cleanup.
+- Caller-supplied timestamps cannot expire boosts.
+- Authorized/internal cleanup uses server time.
+- Valid expired boosts are cleaned up.
+- Non-expired boosts remain active.
+
+## 7.5 SSR and SEO tests
+
+Verify actual server-rendered output for:
+
+- Homepage.
+- City page.
+- Category page.
+- Listing detail page.
+- Seller profile page where supported.
+
+Verify:
+
+- No missing AppProvider runtime crash.
+- Real database content appears in the server HTML.
+- Metadata matches the actual record.
+- Canonical URLs are correct.
+- Structured data matches the rendered page.
+- Hierarchical URLs continue to work.
+- Unknown or deleted listing IDs return appropriate not-found behavior.
+- Slug changes do not cause the wrong listing to load.
+- Public content does not rely on hidden SEO-only text.
+
+Do not count client-side hydration output as proof of SSR.
+
+## 7.6 Admin Panel tests
+
+Test the important workflows of all 15 existing modules.
+
+Verify that:
+
+- Admin authorization is server-side.
+- Client role switching cannot grant privileges.
+- Persistent changes survive reloads.
+- CRUD operations actually update PostgreSQL.
+- Bulk actions work.
+- Filters and searches return correct records.
+- Audit logs contain real actor information.
+- Impersonation cannot be forged.
+- Failed backend operations do not produce false success messages.
+
+Preserve the existing UI while testing its actual functionality.
+
+## 7.7 Build and type verification
+
+Run:
+
+- Relevant unit tests.
+- Relevant integration tests.
+- Relevant API/security tests.
+- Relevant SSR tests.
+- TypeScript type checking.
+- Production build.
+
+Fix genuine failures caused by the implementation.
+
+Do not hide errors through broad TypeScript suppression, weakened validation, skipped tests or ignored build failures.
+
+Inspect the existing `next.config.ts` configuration, including its ESLint build-error handling. Do not use ignored lint errors to claim that the application is clean.
+
+If a check cannot run because a required external service or credential is unavailable, state the exact reason and distinguish it from a passing check.
+
+---
+
+# PHASE 8 — FINAL IMPLEMENTATION REPORT
+
+After implementation and verification, provide a factual report containing:
+
+## A. Files changed
+List the exact files created, modified and removed.
+
+## B. PostgreSQL implementation
+Explain:
+
+- Actual PostgreSQL driver.
+- Connection configuration.
+- Migration files.
+- Tables added or modified.
+- Repositories implemented.
+- Previous in-memory persistence removed.
+- Any remaining intentionally temporary in-memory state.
+
+## C. Security corrections
+Explain:
+
+- Authentication.
+- Server-side RBAC.
+- Listing API protection.
+- Ownership validation.
+- Field allowlists.
+- Bulk action protection.
+- Admin authorization.
+
+## D. Payment corrections
+Explain:
+
+- Actual gateway integration status.
+- Signature verification.
+- Webhook idempotency.
+- Transactional payment processing.
+- Boost activation rules.
+- Remaining gateway configuration requirements.
+
+Do not claim real gateway verification works unless a real configured gateway was actually verified.
+
+## E. SSR and SEO
+Explain:
+
+- Routes corrected.
+- Actual database-backed server rendering.
+- Metadata and structured data.
+- Hierarchical URL preservation.
+- Duplicate router removal/refactoring.
+
+## F. Admin Panel
+Report all 15 modules individually.
+
+For each module, state whether its existing operations are genuinely connected to PostgreSQL and which workflows were verified.
+
+## G. Test results
+Report:
+
+- Tests created/updated.
+- Tests executed.
+- Passed count.
+- Failed count.
+- Skipped count and reasons.
+- TypeScript result.
+- Production build result.
+
+Do not report tests as passed if they were not run.
+
+## H. Remaining issues
+List only genuine remaining blockers, missing external credentials, or incomplete implementation.
+
+Clearly distinguish:
+
+- Must-fix security/functional issues.
+- External configuration dependencies.
+- Optional improvements.
+
+---
+
+# FINAL NON-NEGOTIABLE RULES
+
+1. Implement the changes directly. Do not return only a plan.
+2. Preserve the existing application and all 15 Admin Panel modules.
+3. Do not replace advanced workflows with simplified alternatives.
+4. Do not use in-memory Maps or Sets as persistent storage.
+5. Do not trust client-supplied user IDs, roles, payment status or administrative permissions.
+6. Do not activate paid boosts without genuine verified payment.
+7. Do not claim PostgreSQL is authoritative until runtime services actually use it.
+8. Do not claim SSR based on hidden SEO text or client-side rendering.
+9. Do not keep duplicate competing routing, service or persistence implementations.
+10. Do not swallow errors or display false success messages.
+11. Create and run meaningful tests. Fix failures and rerun affected tests.
+12. Preserve existing URLs, legitimate user workflows and UI/UX.
+13. Do not introduce unnecessary restrictions on legitimate users.
+14. Do not make unrelated redesigns or feature changes.
+15. Do not mark incomplete work as completed.
+
+**The objective is a genuinely functional, secure, PostgreSQL-backed Classifieds V2 application—not merely a codebase that builds or an interface that looks complete.**

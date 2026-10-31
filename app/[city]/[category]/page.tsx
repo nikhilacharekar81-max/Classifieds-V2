@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
-import { INITIAL_LOCATIONS, INITIAL_CATEGORIES } from '@/lib/data/initialData';
-import { unslugifyCity, unslugifyCategory } from '@/lib/utils/seoAndUrlHelper';
+import { locationRepository } from '@/server/repositories/location.repository';
+import { categoryRepository } from '@/server/repositories/category.repository';
+import { listingRepository } from '@/server/repositories/listing.repository';
 import { AppClientRouter } from '@/components/AppClientRouter';
+import Link from 'next/link';
+
+import { stripChillySuffixes, unslugifyCity } from '@/lib/utils/seoAndUrlHelper';
 
 interface CategoryCityPageProps {
   params: Promise<{ city: string; category: string }>;
@@ -9,12 +13,16 @@ interface CategoryCityPageProps {
 
 export async function generateMetadata({ params }: CategoryCityPageProps): Promise<Metadata> {
   const { city, category } = await params;
-  const { cityName } = unslugifyCity(city, INITIAL_LOCATIONS);
-  const { categoryObj } = unslugifyCategory(category, INITIAL_CATEGORIES);
-  const categoryName = categoryObj ? categoryObj.name : category.replace(/_/g, ' ');
+  const { cleanSlug: cleanCitySlug } = stripChillySuffixes(city);
+  const loc = (await locationRepository.findBySlug(cleanCitySlug)) || (await locationRepository.findBySlug(city));
+  const cityName = loc ? loc.name : unslugifyCity(city).cityName;
 
-  const title = `${categoryName} in ${cityName} — Buy, Sell & Best Deals`;
-  const description = `Explore ${categoryName} for sale and services in ${cityName}. Compare prices, inspect photos, chat with verified sellers directly, or post your free ad today!`;
+  const { cleanSlug: cleanCatSlug } = stripChillySuffixes(category);
+  const cat = (await categoryRepository.findBySlug(cleanCatSlug)) || (await categoryRepository.findBySlug(category));
+  const categoryName = cat ? cat.name : cleanCatSlug.charAt(0).toUpperCase() + cleanCatSlug.slice(1);
+
+  const title = `${categoryName} in ${cityName} — Buy, Sell & Best Deals | Classifieds V2`;
+  const description = `Explore ${categoryName} for sale and services in ${cityName}. Compare prices, inspect photos, and chat with verified sellers directly.`;
 
   return {
     title,
@@ -37,19 +45,41 @@ export async function generateMetadata({ params }: CategoryCityPageProps): Promi
 
 export default async function CategoryCityPage({ params }: CategoryCityPageProps) {
   const { city, category } = await params;
-  const { cityName } = unslugifyCity(city, INITIAL_LOCATIONS);
-  const { categoryObj } = unslugifyCategory(category, INITIAL_CATEGORIES);
-  const categoryName = categoryObj ? categoryObj.name : category;
+  const { cleanSlug: cleanCitySlug } = stripChillySuffixes(city);
+  const loc = (await locationRepository.findBySlug(cleanCitySlug)) || (await locationRepository.findBySlug(city));
+  const cityName = loc ? loc.name : unslugifyCity(city).cityName;
+
+  const { cleanSlug: cleanCatSlug } = stripChillySuffixes(category);
+  const cat = (await categoryRepository.findBySlug(cleanCatSlug)) || (await categoryRepository.findBySlug(category));
+  const categoryName = cat ? cat.name : cleanCatSlug.charAt(0).toUpperCase() + cleanCatSlug.slice(1);
+  const categoryId = cat ? cat.id : cleanCatSlug;
+
+  // Genuine PostgreSQL SSR query
+  const listingsData = await listingRepository.findMarketplaceListings({
+    city,
+    category: categoryId,
+    limit: 20,
+  });
 
   return (
     <>
-      <div className="sr-only" aria-hidden="true">
+      <section className="sr-only" aria-label={`${categoryName} listings in ${cityName}`}>
         <h1>{categoryName} in {cityName}</h1>
         <p>
-          Browse top verified listings for {categoryName} in {cityName}.
-          Direct seller contact, zero commissions, real-time safety warnings, and instant chat.
+          Showing {listingsData.total} verified classified ads for {categoryName} in {cityName}.
         </p>
-      </div>
+        <ul>
+          {listingsData.items.map((item) => (
+            <li key={item.id}>
+              <Link href={`/${city}/${category}/${item.id}`}>
+                {item.title} — ₹{item.price.toLocaleString('en-IN')}
+              </Link>
+              <p>{item.description.slice(0, 100)}...</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <AppClientRouter />
     </>
   );

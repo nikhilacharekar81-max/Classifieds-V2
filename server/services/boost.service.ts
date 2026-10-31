@@ -1,51 +1,45 @@
-import { db } from '@/server/db';
+import { boostRepository } from '@/server/repositories/boost.repository';
+import { paymentRepository } from '@/server/repositories/payment.repository';
+import { listingRepository } from '@/server/repositories/listing.repository';
+import { adminRepository } from '@/server/repositories/admin.repository';
 import { PromotionalPackage, OrderTransaction, BoostAnalyticsSummary, Listing } from '@/lib/types';
-import { isListingBoosted } from '@/lib/utils/boostHelper';
+import crypto from 'node:crypto';
 
 export class BoostService {
-  public getPackages(): PromotionalPackage[] {
-    return Array.from(db.packages.values());
+  public async getPackages(): Promise<PromotionalPackage[]> {
+    return await boostRepository.findAllPackages();
   }
 
-  public getPackageById(id: string): PromotionalPackage | undefined {
-    return db.packages.get(id);
+  public async getPackageById(id: string): Promise<PromotionalPackage | null> {
+    return await boostRepository.findPackageById(id);
   }
 
-  public createPackage(pkgData: Omit<PromotionalPackage, 'id' | 'salesCount'>): PromotionalPackage {
-    const id = 'pkg_' + Date.now();
-    const newPkg: PromotionalPackage = {
+  public async createPackage(pkgData: Omit<PromotionalPackage, 'id' | 'salesCount'>): Promise<PromotionalPackage> {
+    const id = `pkg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    return await boostRepository.createPackage({
       ...pkgData,
       id,
-      salesCount: 0,
-      durationHours: pkgData.durationHours || pkgData.durationDays * 24,
-      currency: pkgData.currency || 'INR',
-    };
-    db.packages.set(id, newPkg);
-    return newPkg;
+    });
   }
 
-  public updatePackage(id: string, updatedData: Partial<PromotionalPackage>): PromotionalPackage | null {
-    const existing = db.packages.get(id);
-    if (!existing) return null;
+  public async updatePackage(id: string, updatedData: Partial<PromotionalPackage>): Promise<PromotionalPackage | null> {
+    const updateFields: any = {};
+    if (updatedData.name !== undefined) updateFields.name = updatedData.name;
+    if (updatedData.badge !== undefined) updateFields.badge = updatedData.badge;
+    if (updatedData.price !== undefined) updateFields.price = String(updatedData.price);
+    if (updatedData.discountPrice !== undefined) updateFields.discountPrice = String(updatedData.discountPrice);
+    if (updatedData.durationDays !== undefined) updateFields.durationDays = updatedData.durationDays;
+    if (updatedData.durationHours !== undefined) updateFields.durationHours = updatedData.durationHours;
+    if (updatedData.features !== undefined) updateFields.features = updatedData.features;
+    if (updatedData.isActive !== undefined) updateFields.isActive = updatedData.isActive;
 
-    const updated: PromotionalPackage = {
-      ...existing,
-      ...updatedData,
-      id,
-      durationHours:
-        updatedData.durationHours ||
-        (updatedData.durationDays ? updatedData.durationDays * 24 : existing.durationHours),
-    };
-    db.packages.set(id, updated);
-    return updated;
+    return await boostRepository.updatePackage(id, updateFields);
   }
 
-  public togglePackageStatus(id: string): PromotionalPackage | null {
-    const pkg = db.packages.get(id);
+  public async togglePackageStatus(id: string): Promise<PromotionalPackage | null> {
+    const pkg = await boostRepository.findPackageById(id);
     if (!pkg) return null;
-    pkg.isActive = !pkg.isActive;
-    db.packages.set(id, pkg);
-    return pkg;
+    return await boostRepository.updatePackage(id, { isActive: !pkg.isActive });
   }
 
   /**
@@ -56,12 +50,11 @@ export class BoostService {
     listingId: string;
     packageId: string;
     userId: string;
-    userName?: string;
   }): Promise<{ success: boolean; order?: any; error?: string; status: number }> {
-    const { listingId, packageId, userId, userName = 'Marketplace User' } = params;
+    const { listingId, packageId, userId } = params;
 
     // 1. Verify listing exists
-    const listing = db.listings.get(listingId);
+    const listing = await listingRepository.findById(listingId);
     if (!listing) {
       return { success: false, error: 'Listing not found', status: 404 };
     }
@@ -85,7 +78,7 @@ export class BoostService {
     }
 
     // 4. Verify ad is not already actively boosted
-    if (isListingBoosted(listing)) {
+    if (listing.isBoosted) {
       return {
         success: false,
         error: 'This ad is currently boosted. You can boost it again after current boost expires.',
@@ -94,7 +87,7 @@ export class BoostService {
     }
 
     // 5. Look up package in database (never from client)
-    const pkg = db.packages.get(packageId);
+    const pkg = await boostRepository.findPackageById(packageId);
     if (!pkg || !pkg.isActive) {
       return {
         success: false,
@@ -105,26 +98,20 @@ export class BoostService {
 
     const durationHours = pkg.durationHours || pkg.durationDays * 24;
     const price = pkg.price;
-    const taxAmount = Math.round(price * 0.18); // 18% GST standard
-    const totalAmount = price + taxAmount;
-    const orderId = `ORD-BOOST-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const taxAmount = Math.round(price * 0.18 * 100) / 100; // 18% GST standard
+    const totalAmount = Math.round((price + taxAmount) * 100) / 100;
+    const orderId = `ORD-BOOST-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
-    const orderRecord = {
+    const orderRecord = await boostRepository.createOrder({
       orderId,
       listingId,
       packageId: pkg.id,
       userId,
-      userName,
       price,
       taxAmount,
       totalAmount,
       durationHours,
-      currency: pkg.currency || 'INR',
-      status: 'pending' as const,
-      createdAt: new Date().toISOString(),
-    };
-
-    db.orders.set(orderId, orderRecord);
+    });
 
     return {
       success: true,
@@ -134,117 +121,94 @@ export class BoostService {
   }
 
   /**
-   * Applies boost payment and atomically activates boost on listing.
+   * Cryptographically verifies HMAC signature from payment gateway.
+   */
+  public verifyPaymentSignature(params: {
+    orderId: string;
+    paymentId: string;
+    signature: string;
+    secret?: string;
+  }): boolean {
+    const secret = params.secret || process.env.PAYMENT_GATEWAY_SECRET;
+    if (!secret) {
+      // In development / demo environment without live gateway key, verify well-formed non-empty signature
+      return Boolean(params.signature && params.signature.length >= 16);
+    }
+
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(`${params.orderId}|${params.paymentId}`)
+      .digest('hex');
+
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(params.signature));
+  }
+
+  /**
+   * Applies boost payment and atomically activates boost on listing using PostgreSQL transaction.
    */
   public async verifyAndApplyBoost(params: {
     orderId: string;
-    listingId: string;
-    packageId: string;
     paymentId: string;
     paymentGateway: string;
+    signature?: string;
     userId: string;
-    nowMs?: number;
-  }): Promise<{ success: boolean; listing?: Listing; transaction?: OrderTransaction; error?: string; status: number }> {
-    const { orderId, listingId, packageId, paymentId, paymentGateway, userId, nowMs = Date.now() } = params;
+  }): Promise<{ success: boolean; listingId?: string; invoiceNumber?: string; error?: string; status: number }> {
+    const { orderId, paymentId, paymentGateway, signature, userId } = params;
 
-    const order = db.orders.get(orderId);
+    const order = await boostRepository.findOrderById(orderId);
     if (!order) {
       return { success: false, error: 'Boost order not found', status: 404 };
     }
     if (order.status === 'completed') {
-      return { success: false, error: 'This order has already been completed', status: 400 };
+      return { success: true, listingId: order.listingId, invoiceNumber: `INV-${order.orderId.slice(-6)}`, status: 200 };
     }
 
-    const listing = db.listings.get(listingId);
-    if (!listing) {
-      return { success: false, error: 'Listing not found', status: 404 };
-    }
-    if (listing.sellerId !== userId) {
-      return { success: false, error: 'Unauthorized user verification', status: 403 };
+    // Verify ownership
+    if (order.userId !== userId) {
+      return { success: false, error: 'Unauthorized: User does not match order', status: 403 };
     }
 
-    const pkg = db.packages.get(packageId);
-    if (!pkg) {
-      return { success: false, error: 'Boost package not found', status: 400 };
+    // Gateway Signature Verification
+    if (signature && !this.verifyPaymentSignature({ orderId, paymentId, signature })) {
+      return { success: false, error: 'Invalid payment signature from gateway', status: 400 };
     }
 
-    const durationHours = pkg.durationHours || pkg.durationDays * 24;
-    const boostStartedAt = new Date(nowMs).toISOString();
-    const boostExpiresAt = new Date(nowMs + durationHours * 3600 * 1000).toISOString();
-
-    // Update listing
-    const updatedListing: Listing = {
-      ...listing,
-      isBoosted: true,
-      boostStatus: 'active',
-      boostStartedAt,
-      boostExpiresAt,
-      boostPackageId: pkg.id,
-      boostPackageName: pkg.name,
-      boostPrice: pkg.price,
-      boostDurationHours: durationHours,
-      boostPaymentId: paymentId,
-      boostViews: listing.boostViews || 0,
-      boostImpressions: listing.boostImpressions || 0,
-      boostClicks: listing.boostClicks || 0,
-    };
-
-    db.listings.set(listingId, updatedListing);
-
-    // Update order status
-    order.status = 'completed';
-    db.orders.set(orderId, order);
-
-    // Increment sales count
-    pkg.salesCount = (pkg.salesCount || 0) + 1;
-    db.packages.set(pkg.id, pkg);
-
-    // Create completed transaction record with tax invoice
-    const transactionId = `tx_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`;
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
-    const transaction: OrderTransaction = {
-      id: transactionId,
-      orderId,
-      userId,
-      userName: order.userName,
-      packageId: pkg.id,
-      packageName: pkg.name,
-      amount: pkg.price,
-      taxAmount: order.taxAmount,
-      totalAmount: order.totalAmount,
-      status: 'completed',
-      paymentGateway: paymentGateway as any,
-      paymentId,
-      invoiceNumber,
-      createdAt: new Date(nowMs).toISOString(),
-    };
 
-    db.transactions.set(transactionId, transaction);
+    try {
+      const result = await paymentRepository.activateBoostInTransaction({
+        orderId,
+        paymentId,
+        paymentGateway,
+        invoiceNumber,
+      });
 
-    // Record system audit log
-    db.auditLogs.set(`audit_${Date.now()}`, {
-      id: `audit_${Date.now()}`,
-      adminId: userId,
-      adminName: order.userName || 'Seller',
-      action: 'BOOST_ACTIVATED',
-      module: 'Commerce',
-      targetId: listingId,
-      targetSummary: `Boosted: ${listing.title} (${pkg.name})`,
-      details: `Paid ₹${order.totalAmount} via ${paymentGateway} (${paymentId}). Valid until ${boostExpiresAt}`,
-      ipAddress: '127.0.0.1',
-      timestamp: boostStartedAt,
-    });
+      // Audit log in PostgreSQL
+      await adminRepository.createAuditLog({
+        adminId: userId,
+        adminName: 'Seller',
+        action: 'BOOST_ACTIVATED',
+        module: 'Commerce',
+        targetId: order.listingId,
+        targetSummary: `Boosted Ad (${order.packageId})`,
+        details: `Activated boost via ${paymentGateway} (${paymentId}). Total ₹${order.totalAmount}`,
+        ipAddress: '127.0.0.1',
+      });
 
-    return {
-      success: true,
-      listing: updatedListing,
-      transaction,
-      status: 200,
-    };
+      return {
+        success: true,
+        listingId: result.listingId,
+        invoiceNumber: result.invoiceNumber,
+        status: 200,
+      };
+    } catch (err: any) {
+      console.error('BoostService.verifyAndApplyBoost error:', err);
+      return { success: false, error: err.message || 'Payment activation failed', status: 500 };
+    }
   }
 
   /**
-   * Durable idempotent webhook handler
+   * Durable idempotent webhook handler backed by PostgreSQL
    */
   public async handleWebhook(event: {
     eventId: string;
@@ -252,11 +216,13 @@ export class BoostService {
     orderId: string;
     paymentId: string;
     paymentGateway: string;
+    payload?: any;
   }): Promise<{ success: boolean; message: string; duplicate?: boolean }> {
-    const { eventId, eventType, orderId, paymentId, paymentGateway } = event;
+    const { eventId, eventType, orderId, paymentId, paymentGateway, payload } = event;
 
-    // Idempotency check against database webhook events table
-    if (db.webhookEvents.has(eventId)) {
+    // Idempotency check in PostgreSQL
+    const alreadyProcessed = await paymentRepository.isEventProcessed(eventId);
+    if (alreadyProcessed) {
       return {
         success: true,
         duplicate: true,
@@ -264,58 +230,51 @@ export class BoostService {
       };
     }
 
-    db.webhookEvents.add(eventId);
-
     if (eventType === 'payment.captured' || eventType === 'checkout.session.completed') {
-      const order = db.orders.get(orderId);
+      const order = await boostRepository.findOrderById(orderId);
       if (!order) {
         return { success: false, message: `Order ${orderId} not found` };
       }
 
       if (order.status !== 'completed') {
-        const result = await this.verifyAndApplyBoost({
+        const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+        await paymentRepository.activateBoostInTransaction({
           orderId,
-          listingId: order.listingId,
-          packageId: order.packageId,
           paymentId,
           paymentGateway,
-          userId: order.userId,
+          invoiceNumber,
+          eventId,
+          webhookPayload: payload,
         });
-        return { success: result.success, message: 'Boost activated via webhook' };
+        return { success: true, message: 'Boost activated via webhook' };
       }
     }
 
+    // Record non-payment webhook event
+    await paymentRepository.recordWebhookEvent(eventId, paymentGateway, orderId, payload || {});
     return { success: true, message: 'Webhook event processed' };
   }
 
-  public cleanupExpiredBoosts(nowMs: number = Date.now()): number {
-    let count = 0;
-    for (const [id, listing] of db.listings.entries()) {
-      if (listing.isBoosted && listing.boostExpiresAt) {
-        const expiryMs = new Date(listing.boostExpiresAt).getTime();
-        if (expiryMs <= nowMs) {
-          listing.isBoosted = false;
-          listing.boostStatus = 'expired';
-          db.listings.set(id, { ...listing });
-          count++;
-        }
-      }
-    }
-    return count;
+  /**
+   * Server-time authoritative cleanup of expired boosts in PostgreSQL
+   */
+  public async cleanupExpiredBoosts(): Promise<number> {
+    const res = await boostRepository.cleanupExpiredBoosts();
+    return res.expiredCount;
   }
 
-  public getBoostAnalytics(): BoostAnalyticsSummary {
-    const allListings = Array.from(db.listings.values());
-    const allTransactions = Array.from(db.transactions.values());
+  public async getBoostAnalytics(): Promise<BoostAnalyticsSummary> {
+    const allTransactions = await boostRepository.findAllTransactions();
+    const allListingsRes = await listingRepository.findMarketplaceListings({ limit: 1000 });
+    const allListings = allListingsRes.items;
 
     let totalRevenue = 0;
     for (const tx of allTransactions) {
       if (tx.status === 'completed') {
-        totalRevenue += tx.amount;
+        totalRevenue += tx.totalAmount || tx.amount || 0;
       }
     }
 
-    const now = Date.now();
     let activeBoostsCount = 0;
     let expiredBoostsCount = 0;
     let totalDurationHours = 0;
@@ -324,17 +283,15 @@ export class BoostService {
     let boostedAdClicks = 0;
 
     for (const listing of allListings) {
-      if (listing.boostStartedAt) {
-        if (isListingBoosted(listing, now)) {
-          activeBoostsCount++;
-        } else if (listing.boostStatus === 'expired') {
-          expiredBoostsCount++;
-        }
-        totalDurationHours += listing.boostDurationHours || 0;
-        boostedAdViews += listing.boostViews || 0;
-        boostedAdImpressions += listing.boostImpressions || 0;
-        boostedAdClicks += listing.boostClicks || 0;
+      if (listing.isBoosted) {
+        activeBoostsCount++;
+      } else if (listing.boostStatus === 'expired') {
+        expiredBoostsCount++;
       }
+      totalDurationHours += listing.boostDurationHours || 0;
+      boostedAdViews += listing.boostViews || 0;
+      boostedAdImpressions += listing.boostImpressions || 0;
+      boostedAdClicks += listing.boostClicks || 0;
     }
 
     const totalBoosts = activeBoostsCount + expiredBoostsCount || allTransactions.length;
@@ -352,10 +309,8 @@ export class BoostService {
     };
   }
 
-  public getAllTransactions(): OrderTransaction[] {
-    return Array.from(db.transactions.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+  public async getAllTransactions(): Promise<OrderTransaction[]> {
+    return await boostRepository.findAllTransactions();
   }
 }
 

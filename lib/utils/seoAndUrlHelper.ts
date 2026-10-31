@@ -222,7 +222,7 @@ export interface ParsedRoute {
  */
 export function unslugifyCity(
   inputSlug: string,
-  locations: LocationItem[]
+  locations: LocationItem[] = []
 ): { cityName: string; citySlug: string; geoId: string } {
   const { cleanSlug, geoId: extractedGeoId } = stripChillySuffixes(inputSlug);
 
