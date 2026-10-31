@@ -73,14 +73,31 @@ export class ListingRepository {
 
   public async findById(id: string): Promise<Listing | null> {
     try {
+      const cleanId = id.trim();
       const rows = await db
         .select()
         .from(schema.listings)
-        .where(eq(schema.listings.id, id))
+        .where(eq(schema.listings.id, cleanId))
         .limit(1);
 
-      if (!rows.length) return null;
-      return this.mapRowToListing(rows[0]);
+      if (rows.length > 0) {
+        return this.mapRowToListing(rows[0]);
+      }
+
+      const digitsMatch = cleanId.match(/^lst_(\d+)$/i);
+      if (digitsMatch) {
+        const suffix = `_${digitsMatch[1]}`;
+        const fallbackRows = await db
+          .select()
+          .from(schema.listings)
+          .where(ilike(schema.listings.id, `%${suffix}`))
+          .limit(1);
+        if (fallbackRows.length > 0) {
+          return this.mapRowToListing(fallbackRows[0]);
+        }
+      }
+
+      return null;
     } catch (error) {
       console.error(`ListingRepository.findById error for ${id}:`, error);
       throw new Error(`Failed to find listing with id ${id}`, { cause: error });

@@ -33,6 +33,8 @@ import { UsPrivacyModal } from '@/components/common/UsPrivacyModal';
 import { EeatSchemaModal } from '@/components/common/EeatSchemaModal';
 import { useRouter } from '@/lib/router/useRouter';
 import { parseChillyPath, updateSeoAndCanonical, findListingById } from '@/lib/utils/seoAndUrlHelper';
+import { AppProvider, InitialServerData, useAppOptional } from '@/context/AppContext';
+import { Listing } from '@/lib/types';
 
 function renderAdminModule(path: string, activeSidebarTab: string) {
   // Special Sub-pages with their own full views
@@ -179,7 +181,18 @@ function renderAdminModule(path: string, activeSidebarTab: string) {
   }
 }
 
-export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) {
+export interface AppClientRouterProps {
+  initialPath?: string;
+  initialQuery?: Record<string, string>;
+  initialListing?: Listing | null;
+  initialServerData?: InitialServerData;
+}
+
+function AppClientRouterInner({
+  initialPath,
+  initialQuery,
+  initialListing,
+}: AppClientRouterProps) {
   const {
     activeSidebarTab,
     setActiveSidebarTab,
@@ -194,8 +207,10 @@ export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) 
     setSelectedMarketplaceCategory,
     selectedMarketplaceSubcategory,
     setSelectedMarketplaceSubcategory,
+    marketplaceSearch,
+    setMarketplaceSearch,
   } = useApp();
-  const { path } = useRouter(initialPath);
+  const { path, query } = useRouter(initialPath, initialQuery);
 
   const parsedRoute = useMemo(() => {
     return parseChillyPath(path, locations, categories);
@@ -217,12 +232,17 @@ export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) 
       }
     }
 
-    // 3. Find active listing if on item page
+    // 3. Sync search query if on search route or ?q= param
+    if (query.q !== undefined && query.q !== marketplaceSearch) {
+      setMarketplaceSearch(query.q);
+    }
+
+    // 4. Find active listing if on item page
     const activeListing = parsedRoute.listingId
-      ? findListingById(listings, parsedRoute.listingId)
+      ? findListingById(listings, parsedRoute.listingId) || initialListing || null
       : null;
 
-    // 4. Update Document SEO & Canonical Link Tag
+    // 5. Update Document SEO & Canonical Link Tag
     updateSeoAndCanonical(parsedRoute, {
       listing: activeListing,
       categories,
@@ -230,15 +250,19 @@ export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) 
     });
   }, [
     parsedRoute,
+    query.q,
     listings,
+    initialListing,
     categories,
     settings,
     selectedMarketplaceCity,
     selectedMarketplaceCategory,
     selectedMarketplaceSubcategory,
+    marketplaceSearch,
     setSelectedMarketplaceCity,
     setSelectedMarketplaceCategory,
     setSelectedMarketplaceSubcategory,
+    setMarketplaceSearch,
   ]);
 
   useEffect(() => {
@@ -273,11 +297,11 @@ export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) 
     </>
   );
 
-  // Route: Listing Detail View (/ad/:id or /item/:id or /mumbai/item/:id)
+  // Route: Listing Detail View (/ad/:id or /item/:id or /mumbai/cars/used-cars/...)
   if (parsedRoute.routeType === 'listing' && parsedRoute.listingId) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
-        <ListingDetailPage listingId={parsedRoute.listingId} />
+        <ListingDetailPage listingId={parsedRoute.listingId} initialListing={initialListing} />
         {renderGlobalOverlays()}
       </div>
     );
@@ -303,16 +327,6 @@ export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) 
     );
   }
 
-  // Route: Global Search (/search)
-  if (parsedRoute.routeType === 'search') {
-    return (
-      <div className={theme === 'dark' ? 'dark' : ''}>
-        <GlobalSearchPage />
-        {renderGlobalOverlays()}
-      </div>
-    );
-  }
-
   // Route: Admin Section (/admin/*)
   if (parsedRoute.routeType === 'admin') {
     return (
@@ -331,11 +345,24 @@ export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) 
     );
   }
 
-  // Default Route: Public Marketplace / Home / City / Category (/)
+  // Default Route: Public Marketplace / Home / City / Category / Search
   return (
     <div className={theme === 'dark' ? 'dark' : ''}>
-      <MarketplaceView />
+      <MarketplaceView initialRoute={parsedRoute} initialQuery={query} />
       {renderGlobalOverlays()}
     </div>
   );
 }
+
+export function AppClientRouter(props: AppClientRouterProps = {}) {
+  const existingContext = useAppOptional();
+  if (!existingContext) {
+    return (
+      <AppProvider initialServerData={props.initialServerData}>
+        <AppClientRouterInner {...props} />
+      </AppProvider>
+    );
+  }
+  return <AppClientRouterInner {...props} />;
+}
+

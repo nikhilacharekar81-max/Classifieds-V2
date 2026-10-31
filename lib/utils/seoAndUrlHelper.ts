@@ -184,6 +184,14 @@ export function stripChillySuffixes(part: string): {
   if (itemMatch) {
     itemId = itemMatch[1];
     cleanSlug = part.replace(/(?:-iid-|-item-).+$/i, '');
+  } else {
+    const lstMatch = part.match(/-(lst_[a-zA-Z0-9_-]+)$/i);
+    if (lstMatch) {
+      itemId = lstMatch[1];
+      cleanSlug = part.replace(/-(lst_[a-zA-Z0-9_-]+)$/i, '');
+    } else if (/^lst_[a-zA-Z0-9_-]+$/i.test(part)) {
+      itemId = part;
+    }
   }
 
   // Extract _g{number}

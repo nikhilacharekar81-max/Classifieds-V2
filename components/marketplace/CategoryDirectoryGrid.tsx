@@ -31,9 +31,11 @@ import {
 import { Category } from '@/lib/types';
 import { useApp } from '@/context/AppContext';
 import { navigateTo } from '@/lib/router/useRouter';
+import { buildChillyUrl } from '@/lib/utils/seoAndUrlHelper';
 
 interface CategoryDirectoryGridProps {
   categories: Category[];
+  currentCity?: string;
   onSelectCategory?: (categoryId: string) => void;
   onSelectSubcategory?: (categoryId: string, subcategoryId: string) => void;
   selectedCategoryId?: string;
@@ -145,6 +147,7 @@ const CATEGORY_THEMES: Record<string, { bg: string; text: string; badge: string;
 
 export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
   categories,
+  currentCity = 'All India',
   onSelectCategory,
   onSelectSubcategory,
   selectedCategoryId,
@@ -270,7 +273,7 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Browse classified categories and direct subcategories across India
+              Browse classified categories and direct subcategories across {currentCity && currentCity !== 'All India' ? currentCity : 'India'}
             </p>
           </div>
 
@@ -367,6 +370,12 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
             const visibleSubs = isExpanded ? subs : subs.slice(0, 6);
             const hasMore = subs.length > 6 && !searchQuery;
             const totalLiveAds = (listingCounts.parentMap[cat.id] || 0) + cat.listingCount;
+            const catUrl = buildChillyUrl({
+              city: currentCity,
+              categoryId: cat.id,
+              subcategoryId: 'all',
+              categories,
+            });
 
             return (
               <div
@@ -379,8 +388,12 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
               >
                 <div>
                   {/* Category Header Card */}
-                  <div
-                    onClick={() => handleCategoryClick(cat.id)}
+                  <a
+                    href={catUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleCategoryClick(cat.id);
+                    }}
                     className={`p-4 border-b ${theme.border} ${theme.bg} cursor-pointer transition-colors flex items-center justify-between gap-3`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -405,17 +418,13 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
                       </div>
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCategoryClick(cat.id);
-                      }}
-                      className="w-7 h-7 rounded-lg bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-blue-600 hover:bg-white flex items-center justify-center shadow-xs transition-colors shrink-0 cursor-pointer"
+                    <span
+                      className="w-7 h-7 rounded-lg bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-blue-600 hover:bg-white flex items-center justify-center shadow-xs transition-colors shrink-0"
                       title={`Browse all in ${cat.name}`}
                     >
                       <ArrowUpRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                    </span>
+                  </a>
 
                   {/* Subcategories List */}
                   <div className="p-3.5 space-y-1">
@@ -427,12 +436,21 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
                       visibleSubs.map((sub) => {
                         const isSubSelected = selectedSubcategoryId === sub.id;
                         const subAds = (listingCounts.subMap[sub.id] || 0) + sub.listingCount;
-                        const SubIcon = getCategoryIcon(sub.icon);
+                        const subUrl = buildChillyUrl({
+                          city: currentCity,
+                          categoryId: cat.id,
+                          subcategoryId: sub.id,
+                          categories,
+                        });
 
                         return (
-                          <div
+                          <a
                             key={sub.id}
-                            onClick={() => handleSubcategoryClick(cat.id, sub.id)}
+                            href={subUrl}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleSubcategoryClick(cat.id, sub.id);
+                            }}
                             className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-all cursor-pointer group/item ${
                               isSubSelected
                                 ? 'bg-blue-600 text-white font-bold shadow-xs'
@@ -468,7 +486,7 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
                                 }`}
                               />
                             </div>
-                          </div>
+                          </a>
                         );
                       })
                     )}
@@ -496,13 +514,17 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
                     </span>
                   )}
 
-                  <button
-                    onClick={() => handleCategoryClick(cat.id)}
+                  <a
+                    href={catUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleCategoryClick(cat.id);
+                    }}
                     className="text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-0.5 cursor-pointer ml-auto"
                   >
                     <span>View all</span>
                     <ChevronRight className="w-3 h-3" />
-                  </button>
+                  </a>
                 </div>
               </div>
             );
@@ -512,3 +534,4 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
     </section>
   );
 };
+

@@ -14,6 +14,7 @@ import { buildChillyUrl } from '@/lib/utils/seoAndUrlHelper';
 
 interface LocationSelectorInputProps {
   className?: string;
+  currentCity?: string;
 }
 
 // Popular locations for quick 1-tap select
@@ -29,7 +30,10 @@ const POPULAR_CITIES = [
   'Ahmedabad',
 ];
 
-export const LocationSelectorInput: React.FC<LocationSelectorInputProps> = ({ className = '' }) => {
+export const LocationSelectorInput: React.FC<LocationSelectorInputProps> = ({
+  className = '',
+  currentCity,
+}) => {
   const {
     selectedMarketplaceCity,
     setSelectedMarketplaceCity,
@@ -42,6 +46,8 @@ export const LocationSelectorInput: React.FC<LocationSelectorInputProps> = ({ cl
     addToast,
   } = useApp();
 
+  const displayCity = currentCity || selectedMarketplaceCity || 'All India';
+
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDetectingGps, setIsDetectingGps] = useState(false);
@@ -50,9 +56,9 @@ export const LocationSelectorInput: React.FC<LocationSelectorInputProps> = ({ cl
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isAllCities =
-    !selectedMarketplaceCity ||
-    selectedMarketplaceCity.toLowerCase() === 'all india' ||
-    selectedMarketplaceCity.toLowerCase() === 'all cities';
+    !displayCity ||
+    displayCity.toLowerCase() === 'all india' ||
+    displayCity.toLowerCase() === 'all cities';
 
   // Click outside listener
   useEffect(() => {
@@ -141,7 +147,7 @@ export const LocationSelectorInput: React.FC<LocationSelectorInputProps> = ({ cl
         <div className="flex flex-col min-w-0">
           <span className="text-[9px] font-bold text-slate-400 uppercase leading-none tracking-tight">Location</span>
           <span className="text-xs font-bold text-slate-900 truncate max-w-[120px] sm:max-w-[150px] leading-tight">
-            {selectedMarketplaceCity || 'All India'}
+            {displayCity}
           </span>
         </div>
 

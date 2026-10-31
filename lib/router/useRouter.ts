@@ -56,12 +56,19 @@ export function navigateTo(targetUrl: string) {
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
-export function useRouter(initialPath?: string) {
+export function useRouter(initialPath?: string, initialQuery?: Record<string, string>) {
   const [currentUrl, setCurrentUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return window.location.pathname + window.location.search;
     }
-    return initialPath || '/';
+    const base = initialPath || '/';
+    if (initialQuery && Object.keys(initialQuery).length > 0 && !base.includes('?')) {
+      const qs = new URLSearchParams(
+        Object.entries(initialQuery).filter(([_, v]) => v !== undefined && v !== '')
+      ).toString();
+      return qs ? `${base}?${qs}` : base;
+    }
+    return base;
   });
 
   useEffect(() => {
@@ -90,3 +97,4 @@ export function useRouter(initialPath?: string) {
     navigateTo,
   };
 }
+

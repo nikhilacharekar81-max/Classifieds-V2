@@ -36,9 +36,10 @@ import { renderUnclickableDescription } from '@/lib/utils/unclickableLinks';
 
 interface ListingDetailPageProps {
   listingId: string;
+  initialListing?: Listing | null;
 }
 
-export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId }) => {
+export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId, initialListing }) => {
   const {
     listings,
     categories,
@@ -52,7 +53,7 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
     theme,
     currentUser,
   } = useApp();
-  const listing = findListingById(listings, listingId);
+  const listing = findListingById(listings, listingId) || initialListing || null;
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showPhone, setShowPhone] = useState(false);
@@ -83,12 +84,16 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
         <p className="text-sm text-slate-500 max-w-md mt-1 mb-6">
           The listing #{listingId} may have been sold, removed, or expired.
         </p>
-        <button
-          onClick={() => navigateTo('/')}
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            navigateTo('/');
+          }}
           className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow transition-all flex items-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" /> Return to Classifieds Home
-        </button>
+        </a>
       </div>
     );
   }
@@ -96,7 +101,7 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
   const category = categories.find((c) => c.id === listing.categoryId);
   const subcategory = listing.subcategoryId ? categories.find((c) => c.id === listing.subcategoryId) : null;
   const relatedListings = listings
-    .filter((l) => l.id !== listing.id && (l.categoryId === listing.categoryId || l.subcategoryId === listing.subcategoryId || l.location.city === listing.location.city))
+    .filter((l) => l.id !== listing.id && l.status === 'approved' && (l.categoryId === listing.categoryId || l.subcategoryId === listing.subcategoryId || l.location.city === listing.location.city))
     .slice(0, 4);
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -122,6 +127,11 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
     }, 1200);
   };
 
+  const cityUrl = buildChillyUrl({
+    city: listing.location.city || 'All India',
+    categories,
+  });
+
   const categoryUrl = buildChillyUrl({
     city: listing.location.city || 'All India',
     categoryId: listing.categoryId,
@@ -136,7 +146,8 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
     categories: categories,
   }) : '';
 
-  const handleCategoryClick = () => {
+  const handleCategoryClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (category) {
       setSelectedMarketplaceCategory(category.id);
       setSelectedMarketplaceSubcategory('all');
@@ -147,7 +158,8 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
     }
   };
 
-  const handleSubcategoryClick = () => {
+  const handleSubcategoryClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (category && subcategory) {
       setSelectedMarketplaceCategory(category.id);
       setSelectedMarketplaceSubcategory(subcategory.id);
@@ -197,8 +209,10 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           {/* Logo */}
           <div className="flex items-center gap-6">
-            <button
-              onClick={() => {
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
                 setSelectedMarketplaceCategory('all');
                 setSelectedMarketplaceSubcategory('all');
                 setMarketplaceSearch('');
@@ -207,11 +221,11 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
               className="w-12 h-10 rounded-xl bg-slate-950 text-white flex items-center justify-center font-black text-2xl tracking-tighter cursor-pointer hover:bg-slate-800 transition-colors"
             >
               chillyads
-            </button>
+            </a>
 
             {/* Typeable Location Selector */}
             <div className="hidden sm:block">
-              <LocationSelectorInput />
+              <LocationSelectorInput currentCity={listing.location?.city} />
             </div>
           </div>
 
@@ -239,27 +253,35 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
 
           {/* Actions: My Account & SELL Button */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => navigateTo('/my-account')}
+            <a
+              href="/my-account"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateTo('/my-account');
+              }}
               className="px-3 py-2 text-slate-800 dark:text-slate-200 hover:text-blue-600 font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
               title="User Account & Ads Panel"
             >
               <User className="w-4 h-4 text-blue-600" />
               <span className="hidden sm:inline">My Account</span>
-            </button>
+            </a>
 
-            <button
-              onClick={() => navigateTo('/post')}
+            <a
+              href="/post"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateTo('/post');
+              }}
               className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 border-2 border-slate-950 transition-all uppercase tracking-wider cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" /> + SELL
-            </button>
+            </a>
           </div>
         </div>
 
         {/* Mobile Location Selector Bar */}
         <div className="sm:hidden px-4 pb-2.5 pt-1">
-          <LocationSelectorInput className="w-full" />
+          <LocationSelectorInput className="w-full" currentCity={listing.location?.city} />
         </div>
       </header>
 
@@ -271,35 +293,57 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
       />
 
       {/* Top Breadcrumb Bar - OLX Style */}
-      <div className="bg-white border-b border-slate-200 listing-breadcrumb text-slate-500">
+      <nav aria-label="Breadcrumb" className="bg-white border-b border-slate-200 listing-breadcrumb text-slate-500">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between text-xs overflow-x-auto whitespace-nowrap scrollbar-none">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigateTo('/')}
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateTo('/');
+              }}
               className="hover:text-blue-600 font-medium flex items-center gap-1 shrink-0"
             >
               Home
-            </button>
+            </a>
+            {listing.location?.city && (
+              <>
+                <span className="text-slate-300">/</span>
+                <a
+                  href={cityUrl}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setSelectedMarketplaceCity(listing.location.city);
+                    navigateTo(cityUrl);
+                  }}
+                  className="hover:text-blue-600 font-medium transition-colors cursor-pointer shrink-0"
+                >
+                  {listing.location.city}
+                </a>
+              </>
+            )}
             <span className="text-slate-300">/</span>
             {category && (
               <>
-                <button
+                <a
+                  href={categoryUrl}
                   onClick={handleCategoryClick}
                   className="hover:text-blue-600 font-medium transition-colors cursor-pointer shrink-0"
                 >
                   {category.name}
-                </button>
+                </a>
                 <span className="text-slate-300">/</span>
               </>
             )}
             {subcategory && (
               <>
-                <button
+                <a
+                  href={subcategoryUrl}
                   onClick={handleSubcategoryClick}
                   className="hover:text-blue-600 font-medium transition-colors cursor-pointer shrink-0"
                 >
                   {subcategory.name}
-                </button>
+                </a>
                 <span className="text-slate-300">/</span>
               </>
             )}
@@ -319,7 +363,7 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
             </button>
           </div>
         </div>
-      </div>
+      </nav>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         <article itemScope itemType="https://schema.org/Product" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -533,12 +577,18 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
               </h4>
 
               <div className="flex items-center gap-3.5">
-                <img
-                  src={listing.sellerAvatar}
-                  alt={listing.sellerName}
-                  referrerPolicy="no-referrer"
-                  className="w-14 h-14 rounded-full object-cover border-2 border-slate-200 shrink-0"
-                />
+                {listing.sellerAvatar ? (
+                  <img
+                    src={listing.sellerAvatar}
+                    alt={listing.sellerName}
+                    referrerPolicy="no-referrer"
+                    className="w-14 h-14 rounded-full object-cover border-2 border-slate-200 shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-slate-900 text-white font-black text-lg flex items-center justify-center border-2 border-slate-200 shrink-0">
+                    {(listing.sellerName || 'S').charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-900 text-base flex items-center gap-1.5">
                     <span className="truncate">{listing.sellerName}</span>
@@ -669,31 +719,38 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId 
               Similar Classifieds in {listing.location.city}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              {relatedListings.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => navigateTo(buildChillyUrl({ listing: item, categories }))}
-                  className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md cursor-pointer transition-all group"
-                >
-                  <div className="relative h-40 bg-slate-900 overflow-hidden">
-                    <ImageWithFallback
-                      src={item.images[0]}
-                      alt={item.title}
-                      categoryId={item.categoryId}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute bottom-2 left-2 bg-black/60 text-white font-bold text-xs px-2 py-0.5 rounded">
-                      ₹{item.price.toLocaleString('en-IN')}
+              {relatedListings.map((item) => {
+                const itemUrl = buildChillyUrl({ listing: item, categories });
+                return (
+                  <a
+                    key={item.id}
+                    href={itemUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigateTo(itemUrl);
+                    }}
+                    className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md cursor-pointer transition-all group block"
+                  >
+                    <div className="relative h-40 bg-slate-900 overflow-hidden">
+                      <ImageWithFallback
+                        src={item.images[0]}
+                        alt={item.title}
+                        categoryId={item.categoryId}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute bottom-2 left-2 bg-black/60 text-white font-bold text-xs px-2 py-0.5 rounded">
+                        ₹{item.price.toLocaleString('en-IN')}
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-3">
-                    <h4 className="font-bold text-xs text-slate-800 truncate">{item.title}</h4>
-                    <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-slate-400" /> {item.location.city}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                    <div className="p-3">
+                      <h4 className="font-bold text-xs text-slate-800 truncate">{item.title}</h4>
+                      <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-400" /> {item.location.city}
+                      </p>
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           </div>
         )}

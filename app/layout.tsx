@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { ClientAppProvider } from '@/components/ClientAppProvider';
+import { listingRepository } from '@/server/repositories/listing.repository';
+import { categoryRepository } from '@/server/repositories/category.repository';
+import { locationRepository } from '@/server/repositories/location.repository';
+import { adminRepository } from '@/server/repositories/admin.repository';
+import { cmsRepository } from '@/server/repositories/cms.repository';
 
 export const metadata: Metadata = {
   title: 'Classifieds V2 — Leading Verified Marketplace & Classifieds',
@@ -20,19 +25,44 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export const dynamic = 'force-dynamic';
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let initialServerData = undefined;
+  try {
+    const [listingsResult, categories, locations, settings, cmsPages] = await Promise.all([
+      listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
+      categoryRepository.findAll(),
+      locationRepository.findAll(),
+      adminRepository.getSystemSettings(),
+      cmsRepository.findAllPages(),
+    ]);
+    initialServerData = {
+      listings: listingsResult.items,
+      categories,
+      locations,
+      settings,
+      cmsPages,
+    };
+  } catch (err) {
+    console.error('RootLayout initial data fetch error:', err);
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased font-sans selection:bg-emerald-500 selection:text-white"
         suppressHydrationWarning
       >
-        <ClientAppProvider>{children}</ClientAppProvider>
+        <ClientAppProvider initialServerData={initialServerData}>
+          {children}
+        </ClientAppProvider>
       </body>
     </html>
   );
 }
+

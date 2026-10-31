@@ -199,12 +199,21 @@ export const CategorySubNavbar: React.FC<CategorySubNavbarProps> = ({
               const isActive =
                 activeCategoryId === item.categoryId &&
                 (item.subcategoryId ? activeSubcategoryId === item.subcategoryId : true);
+              const href = buildChillyUrl({
+                city,
+                categoryId: item.categoryId,
+                subcategoryId: item.subcategoryId || 'all',
+                categories,
+              });
 
               return (
-                <button
-                  type="button"
+                <a
                   key={item.label}
-                  onClick={() => handleNavigate(item.categoryId, item.subcategoryId || 'all')}
+                  href={href}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleNavigate(item.categoryId, item.subcategoryId || 'all');
+                  }}
                   className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all cursor-pointer shrink-0 select-none ${
                     isActive
                       ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-200 shadow-xs'
@@ -212,7 +221,7 @@ export const CategorySubNavbar: React.FC<CategorySubNavbarProps> = ({
                   }`}
                 >
                   {item.label}
-                </button>
+                </a>
               );
             })}
           </div>

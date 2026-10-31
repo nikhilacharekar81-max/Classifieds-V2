@@ -216,9 +216,20 @@ interface AppContextType {
   fetchGpsLocation: () => void;
 }
 
+export interface InitialServerData {
+  listings?: Listing[];
+  categories?: Category[];
+  locations?: LocationItem[];
+  settings?: SystemSettings;
+  cmsPages?: CmsPage[];
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: React.ReactNode; initialServerData?: InitialServerData }> = ({
+  children,
+  initialServerData,
+}) => {
   // Navigation & Mode
   const [viewMode, setViewMode] = useState<'admin' | 'marketplace'>('admin');
   const [activeSidebarTab, setActiveSidebarTab] = useState<string>('dashboard');
@@ -231,18 +242,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [impersonatedUser, setImpersonatedUser] = useState<UserAccount | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>(INITIAL_USERS[0].id);
 
-  // Collections
-  const [listings, setListings] = useState<Listing[]>(seedCategoriesWithTenAds(INITIAL_LISTINGS));
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+  // Collections (initialized from server-fetched PostgreSQL data during SSR when provided)
+  const [listings, setListings] = useState<Listing[]>(() =>
+    initialServerData?.listings && initialServerData.listings.length > 0
+      ? initialServerData.listings
+      : seedCategoriesWithTenAds(INITIAL_LISTINGS)
+  );
+  const [categories, setCategories] = useState<Category[]>(() =>
+    initialServerData?.categories && initialServerData.categories.length > 0
+      ? initialServerData.categories
+      : INITIAL_CATEGORIES
+  );
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>(INITIAL_CUSTOM_FIELDS);
-  const [locations, setLocations] = useState<LocationItem[]>(INITIAL_LOCATIONS);
+  const [locations, setLocations] = useState<LocationItem[]>(() =>
+    initialServerData?.locations && initialServerData.locations.length > 0
+      ? initialServerData.locations
+      : INITIAL_LOCATIONS
+  );
   const [users, setUsers] = useState<UserAccount[]>(INITIAL_USERS);
   const [reports, setReports] = useState<ReportItem[]>(INITIAL_REPORTS);
   const [rules, setRules] = useState<ModerationRule[]>(INITIAL_MODERATION_RULES);
   const [packages, setPackages] = useState<PromotionalPackage[]>(INITIAL_PACKAGES);
   const [transactions, setTransactions] = useState<OrderTransaction[]>(INITIAL_TRANSACTIONS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
-  const [settings, setSettings] = useState<SystemSettings>(INITIAL_SETTINGS);
+  const [settings, setSettings] = useState<SystemSettings>(() =>
+    initialServerData?.settings ? { ...INITIAL_SETTINGS, ...initialServerData.settings } : INITIAL_SETTINGS
+  );
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>(INITIAL_EMAIL_LOGS);
   const [emailSettings, setEmailSettings] = useState<EmailSettings>(INITIAL_EMAIL_SETTINGS);
@@ -250,7 +275,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [newsletters, setNewsletters] = useState<NewsletterCampaign[]>(INITIAL_NEWSLETTERS);
 
   // CMS Pages & Footer Modal State
-  const [cmsPages, setCmsPages] = useState<CmsPage[]>(INITIAL_CMS_PAGES);
+  const [cmsPages, setCmsPages] = useState<CmsPage[]>(() =>
+    initialServerData?.cmsPages && initialServerData.cmsPages.length > 0
+      ? initialServerData.cmsPages
+      : INITIAL_CMS_PAGES
+  );
   const [activeCmsPageSlug, setActiveCmsPageSlug] = useState<string | null>(null);
   const [reportModalConfig, setReportModalConfig] = useState<{ open: boolean; type?: 'ad' | 'user'; targetId?: string; targetTitle?: string } | null>(null);
 
@@ -1875,6 +1904,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
+export const useAppOptional = () => {
+  return useContext(AppContext);
+};
+
 export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) {
@@ -1882,3 +1915,5 @@ export const useApp = () => {
   }
   return context;
 };
+
+
