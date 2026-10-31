@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "bun test",
+    "db:generate": "drizzle-kit generate --config=src/db/drizzle.config.ts",
+    "db:push": "drizzle-kit push --config=src/db/drizzle.config.ts",
     "clean": "next clean"
   },
   "dependencies": {

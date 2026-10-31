@@ -420,8 +420,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const res = await fetch('/api/listings');
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data)) {
-            setListings(data);
+          const items = Array.isArray(data) ? data : data?.items;
+          if (Array.isArray(items) && items.length > 0) {
+            setListings(items);
           }
         }
       } catch (err) {
@@ -461,7 +462,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetId,
       targetSummary,
       details,
-      ipAddress: currentAdmin.ipAddress.split(' ')[0] || '127.0.0.1',
+      ipAddress: currentAdmin.ipAddress.split(' ')[0] || 'unknown',
       timestamp: new Date().toLocaleString('en-US', {
         dateStyle: 'short',
         timeStyle: 'short',

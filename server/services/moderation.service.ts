@@ -36,7 +36,8 @@ export class ModerationService {
     reportId: string,
     actionNote: string,
     actionType: 'actioned' | 'dismissed',
-    targetListingId?: string
+    targetListingId?: string,
+    actor?: { id?: string; name?: string; ipAddress?: string }
   ): Promise<boolean> {
     const success = await moderationRepository.updateReportStatus(reportId, actionType, actionNote);
     if (!success) return false;
@@ -49,14 +50,14 @@ export class ModerationService {
     }
 
     await adminRepository.createAuditLog({
-      adminId: 'adm_1',
-      adminName: 'Moderator',
+      adminId: actor?.id || 'system',
+      adminName: actor?.name || 'Moderator',
       action: actionType === 'actioned' ? 'REPORT_ACTIONED' : 'REPORT_DISMISSED',
       module: 'Moderation',
       targetId: reportId,
       targetSummary: `Report ${reportId}`,
       details: `Action: ${actionType}. Note: ${actionNote}`,
-      ipAddress: '127.0.0.1',
+      ipAddress: actor?.ipAddress || 'unknown',
     });
 
     return true;
@@ -67,7 +68,10 @@ export class ModerationService {
     return await moderationRepository.findAllRules();
   }
 
-  public async addRule(ruleData: Omit<ModerationRule, 'id'>): Promise<ModerationRule> {
+  public async addRule(
+    ruleData: Omit<ModerationRule, 'id'>,
+    actor?: { id?: string; name?: string; ipAddress?: string }
+  ): Promise<ModerationRule> {
     const id = `rule_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const rule = await moderationRepository.createRule({
       id,
@@ -79,14 +83,14 @@ export class ModerationService {
     });
 
     await adminRepository.createAuditLog({
-      adminId: 'adm_1',
-      adminName: 'Moderator',
+      adminId: actor?.id || 'system',
+      adminName: actor?.name || 'Moderator',
       action: 'RULE_CREATED',
       module: 'Moderation',
       targetId: id,
       targetSummary: rule.title,
       details: `Added moderation rule ${rule.title}`,
-      ipAddress: '127.0.0.1',
+      ipAddress: actor?.ipAddress || 'unknown',
     });
 
     return rule;

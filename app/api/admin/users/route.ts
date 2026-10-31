@@ -27,19 +27,24 @@ export async function POST(req: NextRequest) {
     }
 
     const { action, userId, reason, status, notes } = await req.json();
+    const actor = {
+      id: authContext.userId,
+      name: authContext.user.name,
+      ipAddress: authContext.ipAddress,
+    };
 
     if (action === 'ban' && userId) {
-      const success = await userService.banUser(userId, reason || 'Violated terms of service');
+      const success = await userService.banUser(userId, reason || 'Violated terms of service', actor);
       return NextResponse.json({ success });
     }
 
     if (action === 'unban' && userId) {
-      const success = await userService.unbanUser(userId);
+      const success = await userService.unbanUser(userId, actor);
       return NextResponse.json({ success });
     }
 
     if (action === 'verify_kyc' && userId) {
-      const success = await userService.verifyKyc(userId, status || 'verified', notes);
+      const success = await userService.verifyKyc(userId, status || 'verified', notes, actor);
       return NextResponse.json({ success });
     }
 

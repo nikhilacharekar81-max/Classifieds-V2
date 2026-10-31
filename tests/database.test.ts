@@ -155,4 +155,43 @@ describe('PostgreSQL Database & Schema Integrity', () => {
     // Clean up test user
     await db.delete(schema.users).where(eq(schema.users.id, testSellerId));
   });
+
+  it('enforces ON DELETE RESTRICT on listings.seller_id to prevent accidental cascade deletion of marketplace listings', async () => {
+    const testSellerId = 'usr_restrict_' + Math.random().toString(36).slice(2, 6);
+    const listingId = `lst_restrict_${Date.now()}`;
+
+    await db.insert(schema.users).values({
+      id: testSellerId,
+      name: 'Restrict Test Seller',
+      email: `${testSellerId}@test.com`,
+      phone: '9999999990',
+    });
+
+    await db.insert(schema.listings).values({
+      id: listingId,
+      sellerId: testSellerId,
+      categoryId: 'cat_mobiles',
+      title: `Restrict Integrity Test ${Date.now()}`,
+      description: 'Listing protected against accidental user deletion',
+      price: '12000',
+      state: 'Maharashtra',
+      city: 'Mumbai',
+      locality: 'Powai',
+      status: 'approved',
+      expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000),
+    });
+
+    let deleteBlocked = false;
+    try {
+      await db.delete(schema.users).where(eq(schema.users.id, testSellerId));
+    } catch {
+      deleteBlocked = true;
+    }
+
+    expect(deleteBlocked).toBe(true);
+
+    // Clean up in proper order
+    await db.delete(schema.listings).where(eq(schema.listings.id, listingId));
+    await db.delete(schema.users).where(eq(schema.users.id, testSellerId));
+  });
 });

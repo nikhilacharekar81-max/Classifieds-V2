@@ -47,61 +47,73 @@ export class UserService {
     return await userRepository.update(id, fields);
   }
 
-  public async banUser(userId: string, reason: string): Promise<boolean> {
+  public async banUser(
+    userId: string,
+    reason: string,
+    actor?: { id?: string; name?: string; ipAddress?: string }
+  ): Promise<boolean> {
     const user = await userRepository.findById(userId);
     if (!user) return false;
 
     await userRepository.update(userId, { status: 'banned' });
 
     await adminRepository.createAuditLog({
-      adminId: 'adm_1',
-      adminName: 'Super Administrator',
+      adminId: actor?.id || 'system',
+      adminName: actor?.name || 'Administrator',
       action: 'USER_BANNED',
       module: 'Users',
       targetId: userId,
       targetSummary: user.name,
       details: `Banned user with reason: ${reason}`,
-      ipAddress: '127.0.0.1',
+      ipAddress: actor?.ipAddress || 'unknown',
     });
 
     return true;
   }
 
-  public async unbanUser(userId: string): Promise<boolean> {
+  public async unbanUser(
+    userId: string,
+    actor?: { id?: string; name?: string; ipAddress?: string }
+  ): Promise<boolean> {
     const user = await userRepository.findById(userId);
     if (!user) return false;
 
     await userRepository.update(userId, { status: 'active' });
 
     await adminRepository.createAuditLog({
-      adminId: 'adm_1',
-      adminName: 'Super Administrator',
+      adminId: actor?.id || 'system',
+      adminName: actor?.name || 'Administrator',
       action: 'USER_UNBANNED',
       module: 'Users',
       targetId: userId,
       targetSummary: user.name,
       details: 'Unbanned user',
-      ipAddress: '127.0.0.1',
+      ipAddress: actor?.ipAddress || 'unknown',
     });
 
     return true;
   }
 
-  public async verifyKyc(userId: string, status: 'verified' | 'rejected', notes?: string): Promise<boolean> {
+  public async verifyKyc(
+    userId: string,
+    status: 'verified' | 'rejected',
+    notes?: string,
+    actor?: { id?: string; name?: string; ipAddress?: string }
+  ): Promise<boolean> {
     const user = await userRepository.findById(userId);
     if (!user) return false;
 
     await userRepository.updateKycStatus(userId, status, notes);
 
     await adminRepository.createAuditLog({
-      adminId: 'adm_1',
-      adminName: 'Super Administrator',
+      adminId: actor?.id || 'system',
+      adminName: actor?.name || 'Administrator',
       action: status === 'verified' ? 'KYC_APPROVED' : 'KYC_REJECTED',
       module: 'Users',
       targetId: userId,
       targetSummary: user.name,
       details: notes || `KYC status changed to ${status}`,
-      ipAddress: '127.0.0.1',
+      ipAddress: actor?.ipAddress || 'unknown',
     });
 
     return true;

@@ -25,7 +25,7 @@ export class UserRepository {
       reviewCount: row.reviewCount,
       joinedDate: row.createdAt.toISOString().split('T')[0],
       lastLogin: row.updatedAt.toISOString().split('T')[0],
-      lastIp: '127.0.0.1',
+      lastIp: 'unknown',
       businessDetails: row.businessName
         ? {
             companyName: row.businessName,
@@ -165,7 +165,7 @@ export class UserRepository {
       await db.insert(schema.userSessions).values({
         id: sessionId,
         userId,
-        ipAddress: ipAddress || '127.0.0.1',
+        ipAddress: ipAddress || 'unknown',
         userAgent: userAgent || null,
         impersonatedBy: impersonatedBy || null,
         expiresAt,

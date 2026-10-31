@@ -45,7 +45,7 @@ export const users = pgTable('users', {
 export const userSessions = pgTable('user_sessions', {
   id: varchar('id', { length: 128 }).primaryKey(),
   userId: varchar('user_id', { length: 64 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
-  ipAddress: varchar('ip_address', { length: 64 }).notNull().default('127.0.0.1'),
+  ipAddress: varchar('ip_address', { length: 64 }).notNull().default('unknown'),
   userAgent: text('user_agent'),
   impersonatedBy: varchar('impersonated_by', { length: 64 }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -116,7 +116,7 @@ export const listings = pgTable(
   'listings',
   {
     id: varchar('id', { length: 64 }).primaryKey(),
-    sellerId: varchar('seller_id', { length: 64 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+    sellerId: varchar('seller_id', { length: 64 }).notNull().references(() => users.id, { onDelete: 'restrict' }),
     sellerName: varchar('seller_name', { length: 255 }).notNull().default('Seller'),
     sellerPhone: varchar('seller_phone', { length: 32 }).notNull().default(''),
     categoryId: varchar('category_id', { length: 64 }).notNull().references(() => categories.id),
@@ -224,13 +224,19 @@ export const boostTransactions = pgTable('boost_transactions', {
 });
 
 // 11. Payment Webhook Events (Durable Idempotency)
-export const paymentWebhookEvents = pgTable('payment_webhook_events', {
-  id: varchar('id', { length: 128 }).primaryKey(),
-  orderId: varchar('order_id', { length: 64 }).notNull(),
-  gateway: varchar('gateway', { length: 64 }).notNull(),
-  payload: jsonb('payload').notNull(),
-  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const paymentWebhookEvents = pgTable(
+  'payment_webhook_events',
+  {
+    id: varchar('id', { length: 128 }).primaryKey(),
+    orderId: varchar('order_id', { length: 64 }).notNull(),
+    gateway: varchar('gateway', { length: 64 }).notNull(),
+    payload: jsonb('payload').notNull(),
+    processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idx_webhook_gateway_event_unique').on(table.gateway, table.id),
+  ]
+);
 
 // 12. User Favorites
 export const userFavorites = pgTable(
@@ -354,7 +360,7 @@ export const auditLogs = pgTable('audit_logs', {
   targetId: varchar('target_id', { length: 64 }).notNull(),
   targetSummary: varchar('target_summary', { length: 255 }).notNull(),
   details: text('details').notNull(),
-  ipAddress: varchar('ip_address', { length: 64 }).notNull().default('127.0.0.1'),
+  ipAddress: varchar('ip_address', { length: 64 }).notNull().default('unknown'),
   timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -91,20 +91,31 @@ export default async function ListingHierarchicalPage({ params }: ListingPagePro
         />
       )}
 
-      {/* Semantic Server-Rendered HTML for Crawlers */}
+      {/* Interactive Marketplace Interface */}
+      <AppClientRouter initialPath={`/${city}/${category}/${listingSlug}`} />
+
+      {/* Visible Server-Rendered HTML from PostgreSQL */}
       {listing && (
-        <article className="sr-only" aria-label={listing.title}>
-          <h1>{listing.title}</h1>
-          <p>{listing.description}</p>
-          <div>Price: ₹{listing.price.toLocaleString('en-IN')}</div>
-          <div>Location: {listing.location.locality}, {listing.location.city}, {listing.location.state}</div>
-          <div>Seller: {listing.sellerName}</div>
-          <div>Status: {listing.status}</div>
+        <article
+          className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-8 px-4 sm:px-6 lg:px-8"
+          aria-label={listing.title}
+        >
+          <div className="max-w-5xl mx-auto space-y-2">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">{listing.title}</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{listing.description}</p>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-500 dark:text-slate-400 pt-2">
+              <div className="font-semibold text-emerald-600 dark:text-emerald-400">
+                Price: ₹{listing.price.toLocaleString('en-IN')}
+              </div>
+              <div>
+                Location: {listing.location.locality}, {listing.location.city}, {listing.location.state}
+              </div>
+              <div>Seller: {listing.sellerName}</div>
+              <div>Status: {listing.status}</div>
+            </div>
+          </div>
         </article>
       )}
-
-      {/* Interactive Marketplace Interface */}
-      <AppClientRouter />
     </>
   );
 }

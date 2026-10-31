@@ -76,4 +76,51 @@ describe('SSR & SEO Hierarchy, Slugs, and Metadata', () => {
     expect(String(metadata.title)).toContain(listing.title);
     expect(String(metadata.openGraph?.title)).toContain(listing.title);
   });
+
+  it('renders visible (non-sr-only) server-side content from PostgreSQL on public City, Category, and Listing pages', async () => {
+    const serializeReactTree = (node: unknown): string => {
+      const seen = new WeakSet();
+      return JSON.stringify(node, (key, value) => {
+        if (key.startsWith('_')) return undefined;
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) return undefined;
+          seen.add(value);
+        }
+        return value;
+      });
+    };
+
+    const CityPage = (await import('../app/[city]/page')).default;
+    const CategoryCityPage = (await import('../app/[city]/[category]/page')).default;
+    const ListingHierarchicalPage = (await import('../app/[city]/[category]/[listingSlug]/page')).default;
+
+    const cityTree = await CityPage({ params: Promise.resolve({ city: 'mumbai' }) });
+    const citySerialized = serializeReactTree(cityTree);
+    expect(citySerialized).toContain('Classifieds in');
+    expect(citySerialized).toContain('Mumbai');
+    expect(citySerialized).not.toContain('"className":"sr-only"');
+
+    const catTree = await CategoryCityPage({
+      params: Promise.resolve({ city: 'mumbai', category: 'cars' }),
+    });
+    const catSerialized = serializeReactTree(catTree);
+    expect(catSerialized).toContain('Cars');
+    expect(catSerialized).toContain('Mumbai');
+    expect(catSerialized).not.toContain('"className":"sr-only"');
+
+    const res = await listingRepository.findMarketplaceListings({ limit: 1 });
+    const listing = res.items[0];
+    const slug = `${slugify(listing.title)}-iid-${listing.id}`;
+    const listingTree = await ListingHierarchicalPage({
+      params: Promise.resolve({
+        city: 'mumbai',
+        category: listing.categoryId,
+        listingSlug: slug,
+      }),
+    });
+    const listingSerialized = serializeReactTree(listingTree);
+    expect(listingSerialized).toContain(listing.title);
+    expect(listingSerialized).toContain(listing.sellerName);
+    expect(listingSerialized).not.toContain('"className":"sr-only"');
+  });
 });

@@ -15,7 +15,7 @@ export class BoostService {
   }
 
   public async createPackage(pkgData: Omit<PromotionalPackage, 'id' | 'salesCount'>): Promise<PromotionalPackage> {
-    const id = `pkg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const id = `pkg_${crypto.randomUUID()}`;
     return await boostRepository.createPackage({
       ...pkgData,
       id,
@@ -43,8 +43,25 @@ export class BoostService {
   }
 
   /**
+   * Checks whether a real payment gateway secret (and optional provider constraint) is configured.
+   * Fail-closed: returns false whenever PAYMENT_GATEWAY_SECRET is absent or blank.
+   */
+  public isGatewayConfigured(paymentGateway?: string): boolean {
+    const secret = process.env.PAYMENT_GATEWAY_SECRET?.trim();
+    if (!secret) {
+      return false;
+    }
+    const configuredProvider = process.env.PAYMENT_GATEWAY_PROVIDER?.trim();
+    if (configuredProvider && paymentGateway) {
+      return configuredProvider.toLowerCase() === paymentGateway.trim().toLowerCase();
+    }
+    return true;
+  }
+
+  /**
    * Server-authoritative order creation.
    * NEVER trusts client price or duration!
+   * Creates a PENDING internal order even if no external payment gateway is configured yet.
    */
   public async createBoostOrder(params: {
     listingId: string;
@@ -100,7 +117,7 @@ export class BoostService {
     const price = pkg.price;
     const taxAmount = Math.round(price * 0.18 * 100) / 100; // 18% GST standard
     const totalAmount = Math.round((price + taxAmount) * 100) / 100;
-    const orderId = `ORD-BOOST-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const orderId = `ORD-BOOST-${crypto.randomUUID()}`;
 
     const orderRecord = await boostRepository.createOrder({
       orderId,
@@ -121,18 +138,18 @@ export class BoostService {
   }
 
   /**
-   * Cryptographically verifies HMAC signature from payment gateway.
+   * Cryptographically verifies HMAC-SHA256 signature from payment gateway.
+   * Strictly fail-closed: returns false if secret or signature is missing or invalid.
    */
   public verifyPaymentSignature(params: {
     orderId: string;
     paymentId: string;
-    signature: string;
+    signature?: string;
     secret?: string;
   }): boolean {
-    const secret = params.secret || process.env.PAYMENT_GATEWAY_SECRET;
-    if (!secret) {
-      // In development / demo environment without live gateway key, verify well-formed non-empty signature
-      return Boolean(params.signature && params.signature.length >= 16);
+    const secret = (params.secret ?? process.env.PAYMENT_GATEWAY_SECRET)?.trim();
+    if (!secret || !params.signature || !params.orderId || !params.paymentId) {
+      return false;
     }
 
     const expected = crypto
@@ -140,59 +157,170 @@ export class BoostService {
       .update(`${params.orderId}|${params.paymentId}`)
       .digest('hex');
 
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(params.signature));
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const providedBuf = Buffer.from(params.signature, 'utf8');
+    if (expectedBuf.length !== providedBuf.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(expectedBuf, providedBuf);
   }
 
   /**
-   * Applies boost payment and atomically activates boost on listing using PostgreSQL transaction.
+   * Cryptographically verifies HMAC-SHA256 webhook signature.
+   * Strictly fail-closed: returns false if webhook secret or signature is missing or invalid.
+   */
+  public verifyWebhookSignature(params: {
+    rawBody: string;
+    signature?: string | null;
+    secret?: string;
+  }): boolean {
+    const secret = (params.secret ?? process.env.PAYMENT_WEBHOOK_SECRET)?.trim();
+    if (!secret || !params.signature || !params.rawBody) {
+      return false;
+    }
+
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(params.rawBody)
+      .digest('hex');
+
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const providedBuf = Buffer.from(params.signature, 'utf8');
+    if (expectedBuf.length !== providedBuf.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(expectedBuf, providedBuf);
+  }
+
+  /**
+   * Fail-closed payment verification and atomic PostgreSQL boost activation.
+   * Requires a configured gateway, valid cryptographic signature, matching order/amount/currency,
+   * and unprocessed PENDING status before activating boost.
    */
   public async verifyAndApplyBoost(params: {
     orderId: string;
     paymentId: string;
-    paymentGateway: string;
+    paymentGateway?: string;
     signature?: string;
+    amount?: number;
+    currency?: string;
     userId: string;
+    userName?: string;
+    ipAddress?: string;
   }): Promise<{ success: boolean; listingId?: string; invoiceNumber?: string; error?: string; status: number }> {
-    const { orderId, paymentId, paymentGateway, signature, userId } = params;
+    const { orderId, paymentId, paymentGateway, signature, amount, currency, userId, userName, ipAddress } = params;
 
+    // 1. Fail closed if no real payment gateway is configured
+    const secret = process.env.PAYMENT_GATEWAY_SECRET?.trim();
+    if (!secret) {
+      return {
+        success: false,
+        error: 'Payment gateway not configured. Boost order remains pending.',
+        status: 503,
+      };
+    }
+
+    if (!paymentGateway || !paymentGateway.trim()) {
+      return {
+        success: false,
+        error: 'Payment gateway identifier is required',
+        status: 400,
+      };
+    }
+
+    const configuredProvider = process.env.PAYMENT_GATEWAY_PROVIDER?.trim();
+    if (configuredProvider && configuredProvider.toLowerCase() !== paymentGateway.trim().toLowerCase()) {
+      return {
+        success: false,
+        error: `Unrecognized or unconfigured payment gateway: ${paymentGateway}`,
+        status: 400,
+      };
+    }
+
+    // 2. Require cryptographic signature
+    if (!signature || !signature.trim()) {
+      return {
+        success: false,
+        error: 'Payment signature is required for verification',
+        status: 400,
+      };
+    }
+
+    // 3. Look up internal pending order
     const order = await boostRepository.findOrderById(orderId);
     if (!order) {
       return { success: false, error: 'Boost order not found', status: 404 };
     }
-    if (order.status === 'completed') {
-      return { success: true, listingId: order.listingId, invoiceNumber: `INV-${order.orderId.slice(-6)}`, status: 200 };
-    }
 
-    // Verify ownership
+    // 4. Verify ownership
     if (order.userId !== userId) {
       return { success: false, error: 'Unauthorized: User does not match order', status: 403 };
     }
 
-    // Gateway Signature Verification
-    if (signature && !this.verifyPaymentSignature({ orderId, paymentId, signature })) {
+    // 5. Reject already-processed orders
+    if (order.status === 'completed') {
+      return {
+        success: false,
+        error: 'Boost order has already been processed',
+        status: 409,
+      };
+    }
+
+    // 6. Verify amount and currency correspondence against authoritative order
+    const expectedTotal = Number(order.totalAmount);
+    if (amount !== undefined && Math.abs(Number(amount) - expectedTotal) >= 0.01) {
+      return {
+        success: false,
+        error: `Payment amount mismatch: expected ${expectedTotal.toFixed(2)}, got ${Number(amount).toFixed(2)}`,
+        status: 400,
+      };
+    }
+
+    if (currency !== undefined && currency.trim().toUpperCase() !== order.currency.toUpperCase()) {
+      return {
+        success: false,
+        error: `Payment currency mismatch: expected ${order.currency}, got ${currency}`,
+        status: 400,
+      };
+    }
+
+    // 7. Cryptographic signature verification
+    if (!this.verifyPaymentSignature({ orderId, paymentId, signature, secret })) {
       return { success: false, error: 'Invalid payment signature from gateway', status: 400 };
     }
 
-    const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+    const invoiceNumber = `INV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 
     try {
       const result = await paymentRepository.activateBoostInTransaction({
         orderId,
         paymentId,
-        paymentGateway,
+        paymentGateway: paymentGateway.trim(),
         invoiceNumber,
+        verifiedAmount: amount !== undefined ? Number(amount) : expectedTotal,
+        verifiedCurrency: currency !== undefined ? currency.trim().toUpperCase() : order.currency,
       });
 
-      // Audit log in PostgreSQL
+      if (result.duplicate) {
+        return {
+          success: false,
+          error: 'Boost order has already been processed',
+          status: 409,
+        };
+      }
+
+      // Audit log in PostgreSQL with real authenticated actor and IP metadata
       await adminRepository.createAuditLog({
         adminId: userId,
-        adminName: 'Seller',
+        adminName: userName || 'Authenticated User',
         action: 'BOOST_ACTIVATED',
         module: 'Commerce',
         targetId: order.listingId,
         targetSummary: `Boosted Ad (${order.packageId})`,
         details: `Activated boost via ${paymentGateway} (${paymentId}). Total ₹${order.totalAmount}`,
-        ipAddress: '127.0.0.1',
+        ipAddress: ipAddress || 'unknown',
       });
 
       return {
@@ -208,7 +336,8 @@ export class BoostService {
   }
 
   /**
-   * Durable idempotent webhook handler backed by PostgreSQL
+   * Durable, atomically idempotent webhook handler backed by PostgreSQL.
+   * Uses database-enforced ON CONFLICT DO NOTHING and row-level locking inside activateBoostInTransaction.
    */
   public async handleWebhook(event: {
     eventId: string;
@@ -216,43 +345,91 @@ export class BoostService {
     orderId: string;
     paymentId: string;
     paymentGateway: string;
+    amount?: number;
+    currency?: string;
     payload?: any;
-  }): Promise<{ success: boolean; message: string; duplicate?: boolean }> {
-    const { eventId, eventType, orderId, paymentId, paymentGateway, payload } = event;
+  }): Promise<{ success: boolean; message: string; duplicate?: boolean; status?: number }> {
+    const { eventId, eventType, orderId, paymentId, paymentGateway, amount, currency, payload } = event;
 
-    // Idempotency check in PostgreSQL
-    const alreadyProcessed = await paymentRepository.isEventProcessed(eventId);
-    if (alreadyProcessed) {
+    if (!eventId || !orderId || !paymentId || !paymentGateway) {
+      return { success: false, message: 'Missing required webhook fields', status: 400 };
+    }
+
+    const configuredProvider = process.env.PAYMENT_GATEWAY_PROVIDER?.trim();
+    if (configuredProvider && configuredProvider.toLowerCase() !== paymentGateway.trim().toLowerCase()) {
       return {
-        success: true,
-        duplicate: true,
-        message: `Webhook event ${eventId} already processed (idempotent skipped)`,
+        success: false,
+        message: `Unrecognized payment gateway provider: ${paymentGateway}`,
+        status: 400,
       };
     }
 
     if (eventType === 'payment.captured' || eventType === 'checkout.session.completed') {
       const order = await boostRepository.findOrderById(orderId);
       if (!order) {
-        return { success: false, message: `Order ${orderId} not found` };
+        return { success: false, message: `Order ${orderId} not found`, status: 404 };
       }
 
-      if (order.status !== 'completed') {
-        const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
-        await paymentRepository.activateBoostInTransaction({
-          orderId,
-          paymentId,
-          paymentGateway,
-          invoiceNumber,
-          eventId,
-          webhookPayload: payload,
-        });
-        return { success: true, message: 'Boost activated via webhook' };
+      const verifiedAmount = amount ?? payload?.amount;
+      const verifiedCurrency = currency ?? payload?.currency;
+      const expectedTotal = Number(order.totalAmount);
+
+      if (verifiedAmount !== undefined && Math.abs(Number(verifiedAmount) - expectedTotal) >= 0.01) {
+        return {
+          success: false,
+          message: `Payment amount mismatch: expected ${expectedTotal.toFixed(2)}, got ${Number(verifiedAmount).toFixed(2)}`,
+          status: 400,
+        };
       }
+
+      if (verifiedCurrency !== undefined && String(verifiedCurrency).toUpperCase() !== order.currency.toUpperCase()) {
+        return {
+          success: false,
+          message: `Payment currency mismatch: expected ${order.currency}, got ${verifiedCurrency}`,
+          status: 400,
+        };
+      }
+
+      const invoiceNumber = `INV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const txResult = await paymentRepository.activateBoostInTransaction({
+        orderId,
+        paymentId,
+        paymentGateway: paymentGateway.trim(),
+        invoiceNumber,
+        eventId,
+        webhookPayload: payload || {},
+        verifiedAmount: verifiedAmount !== undefined ? Number(verifiedAmount) : expectedTotal,
+        verifiedCurrency: verifiedCurrency ? String(verifiedCurrency).toUpperCase() : order.currency,
+      });
+
+      if (txResult.duplicate) {
+        return {
+          success: true,
+          duplicate: true,
+          message: `Webhook event ${eventId} already processed (idempotent skipped)`,
+          status: 200,
+        };
+      }
+
+      return {
+        success: true,
+        duplicate: false,
+        message: 'Boost activated via webhook',
+        status: 200,
+      };
     }
 
-    // Record non-payment webhook event
-    await paymentRepository.recordWebhookEvent(eventId, paymentGateway, orderId, payload || {});
-    return { success: true, message: 'Webhook event processed' };
+    // Atomically record non-payment webhook event via ON CONFLICT DO NOTHING
+    const newlyRecorded = await paymentRepository.recordWebhookEvent(eventId, paymentGateway, orderId, payload || {});
+    if (!newlyRecorded) {
+      return {
+        success: true,
+        duplicate: true,
+        message: `Webhook event ${eventId} already processed (idempotent skipped)`,
+        status: 200,
+      };
+    }
+    return { success: true, duplicate: false, message: 'Webhook event processed', status: 200 };
   }
 
   /**

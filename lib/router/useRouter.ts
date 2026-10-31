@@ -56,12 +56,12 @@ export function navigateTo(targetUrl: string) {
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
-export function useRouter() {
+export function useRouter(initialPath?: string) {
   const [currentUrl, setCurrentUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return window.location.pathname + window.location.search;
     }
-    return '/';
+    return initialPath || '/';
   });
 
   useEffect(() => {

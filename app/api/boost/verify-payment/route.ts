@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
     }
 
-    const { orderId, paymentId, paymentGateway, signature } = await req.json();
+    const { orderId, paymentId, paymentGateway, signature, amount, currency } = await req.json();
     if (!orderId || !paymentId) {
       return NextResponse.json(
         { error: 'orderId and paymentId are required' },
@@ -17,13 +17,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Call authoritative service with verified userId from session
+    // Call authoritative service with verified userId and IP from session
     const result = await boostService.verifyAndApplyBoost({
       orderId,
       paymentId,
-      paymentGateway: paymentGateway || 'UPI',
+      paymentGateway,
       signature,
+      amount,
+      currency,
       userId: authContext.userId,
+      userName: authContext.user.name,
+      ipAddress: authContext.ipAddress,
     });
 
     if (!result.success) {

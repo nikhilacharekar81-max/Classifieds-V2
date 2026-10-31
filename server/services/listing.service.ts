@@ -30,7 +30,8 @@ export class ListingService {
 
   public async createListing(
     data: Omit<Listing, 'id' | 'createdAt' | 'views' | 'likes' | 'chatsCount'>,
-    authenticatedUserId?: string
+    authenticatedUserId?: string,
+    actorMeta?: { name?: string; ipAddress?: string }
   ): Promise<{ success: boolean; listing?: Listing; error?: string; status: number }> {
     const norm = normalizeAdTitle(data.title);
     if (!norm) {
@@ -60,7 +61,7 @@ export class ListingService {
       const created = await listingRepository.create({
         id,
         sellerId,
-        sellerName: data.sellerName || 'Seller',
+        sellerName: actorMeta?.name || data.sellerName || 'Authenticated User',
         sellerPhone: data.sellerPhone || '',
         categoryId: data.categoryId,
         subcategoryId: data.subcategoryId,
@@ -78,16 +79,16 @@ export class ListingService {
         expiresAt,
       });
 
-      // Audit log in PostgreSQL
+      // Audit log in PostgreSQL with real actor and IP metadata
       await adminRepository.createAuditLog({
         adminId: sellerId,
-        adminName: data.sellerName || 'Seller',
+        adminName: actorMeta?.name || data.sellerName || 'Authenticated User',
         action: 'LISTING_CREATED',
         module: 'Marketplace',
         targetId: id,
         targetSummary: created.title,
         details: `Created listing in ${created.location.city}`,
-        ipAddress: '127.0.0.1',
+        ipAddress: actorMeta?.ipAddress || 'unknown',
       });
 
       return { success: true, listing: created, status: 201 };

@@ -2,6 +2,7 @@ import { db } from '@/src/db/index';
 import * as schema from '@/src/db/schema';
 import { desc, eq, sql } from 'drizzle-orm';
 import { AuditLog, SystemSettings } from '@/lib/types';
+import crypto from 'node:crypto';
 
 export class AdminRepository {
   private mapRowToAuditLog(row: typeof schema.auditLogs.$inferSelect): AuditLog {
@@ -30,7 +31,7 @@ export class AdminRepository {
     ipAddress?: string;
   }): Promise<AuditLog> {
     try {
-      const id = `aud_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const id = `aud_${crypto.randomUUID()}`;
       const inserted = await db
         .insert(schema.auditLogs)
         .values({
@@ -42,7 +43,7 @@ export class AdminRepository {
           targetId: params.targetId,
           targetSummary: params.targetSummary,
           details: params.details,
-          ipAddress: params.ipAddress || '127.0.0.1',
+          ipAddress: params.ipAddress || 'unknown',
         })
         .returning();
 

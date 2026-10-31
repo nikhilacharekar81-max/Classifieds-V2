@@ -78,7 +78,10 @@ export async function POST(req: NextRequest) {
       isBoosted: false,  // Must be purchased
     };
 
-    const result = await listingService.createListing(safePayload, authContext.userId);
+    const result = await listingService.createListing(safePayload, authContext.userId, {
+      name: authContext.user.name,
+      ipAddress: authContext.ipAddress,
+    });
     if (!result.success) {
       return NextResponse.json(
         { error: result.error, code: result.status === 409 ? 'DUPLICATE_TITLE' : 'VALIDATION_ERROR' },

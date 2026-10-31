@@ -1,4 +1,3 @@
-import { AppProvider } from '@/context/AppContext';
 import { AppClientRouter } from '@/components/AppClientRouter';
 import type { Metadata } from 'next';
 
@@ -11,10 +10,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AdminSubRoutePage() {
-  return (
-    <AppProvider>
-      <AppClientRouter />
-    </AppProvider>
-  );
+export default async function AdminSubRoutePage({
+  params,
+}: {
+  params: Promise<{ slug?: string[] }>;
+}) {
+  const { slug } = await params;
+  const subPath = slug && slug.length > 0 ? `/admin/${slug.join('/')}` : '/admin';
+  return <AppClientRouter initialPath={subPath} />;
 }

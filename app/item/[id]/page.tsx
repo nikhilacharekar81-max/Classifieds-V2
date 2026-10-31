@@ -35,6 +35,38 @@ export async function generateMetadata({
   };
 }
 
-export default function ItemDetailPage() {
-  return <AppClientRouter />;
+export default async function ItemDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const listing = await listingService.getListingById(id);
+
+  return (
+    <>
+      <AppClientRouter initialPath={`/item/${id}`} />
+      {listing && (
+        <article
+          className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-8 px-4 sm:px-6 lg:px-8"
+          aria-label={listing.title}
+        >
+          <div className="max-w-5xl mx-auto space-y-2">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">{listing.title}</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{listing.description}</p>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-500 dark:text-slate-400 pt-2">
+              <div className="font-semibold text-emerald-600 dark:text-emerald-400">
+                Price: ₹{listing.price.toLocaleString('en-IN')}
+              </div>
+              <div>
+                Location: {listing.location.locality}, {listing.location.city}, {listing.location.state}
+              </div>
+              <div>Seller: {listing.sellerName}</div>
+              <div>Status: {listing.status}</div>
+            </div>
+          </div>
+        </article>
+      )}
+    </>
+  );
 }

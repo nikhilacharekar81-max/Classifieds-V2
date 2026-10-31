@@ -63,24 +63,41 @@ export default async function CategoryCityPage({ params }: CategoryCityPageProps
 
   return (
     <>
-      <section className="sr-only" aria-label={`${categoryName} listings in ${cityName}`}>
-        <h1>{categoryName} in {cityName}</h1>
-        <p>
-          Showing {listingsData.total} verified classified ads for {categoryName} in {cityName}.
-        </p>
-        <ul>
-          {listingsData.items.map((item) => (
-            <li key={item.id}>
-              <Link href={`/${city}/${category}/${item.id}`}>
-                {item.title} — ₹{item.price.toLocaleString('en-IN')}
-              </Link>
-              <p>{item.description.slice(0, 100)}...</p>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <AppClientRouter initialPath={`/${city}/${category}`} />
 
-      <AppClientRouter />
+      <section
+        className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-8 px-4 sm:px-6 lg:px-8"
+        aria-label={`${categoryName} listings in ${cityName}`}
+      >
+        <div className="max-w-7xl mx-auto space-y-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+              {categoryName} in {cityName}
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              Showing {listingsData.total} verified classified ads for {categoryName} in {cityName}.
+            </p>
+          </div>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {listingsData.items.map((item) => (
+              <li
+                key={item.id}
+                className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/50"
+              >
+                <Link
+                  href={`/${city}/${category}/${item.id}`}
+                  className="text-sm font-semibold text-slate-900 dark:text-white hover:text-emerald-600"
+                >
+                  {item.title} — ₹{item.price.toLocaleString('en-IN')}
+                </Link>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {item.description.slice(0, 100)}...
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
     </>
   );
 }

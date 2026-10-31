@@ -33,14 +33,14 @@ export class EmailService {
     const updated = await emailRepository.updateTemplate(id, fields);
     if (updated) {
       await adminRepository.createAuditLog({
-        adminId: 'adm_1',
-        adminName: 'Super Administrator',
+        adminId: 'system',
+        adminName: 'Administrator',
         action: 'EMAIL_TEMPLATE_UPDATED',
         module: 'Email',
         targetId: id,
         targetSummary: updated.name,
         details: `Updated template ${updated.name}`,
-        ipAddress: '127.0.0.1',
+        ipAddress: 'unknown',
       });
     }
     return updated;
@@ -135,14 +135,14 @@ export class EmailService {
     }
 
     await adminRepository.createAuditLog({
-      adminId: 'adm_1',
-      adminName: 'Super Administrator',
+      adminId: 'system',
+      adminName: 'Administrator',
       action: 'CAMPAIGN_SENT',
       module: 'Email',
       targetId: campaignId,
       targetSummary: campaign.subject,
       details: `Broadcast sent to ${count} users`,
-      ipAddress: '127.0.0.1',
+      ipAddress: 'unknown',
     });
 
     return {

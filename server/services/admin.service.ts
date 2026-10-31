@@ -151,9 +151,21 @@ export class AdminService {
     return await adminRepository.getSystemSettings();
   }
 
-  public async updateSettings(newSettings: Partial<SystemSettings>): Promise<SystemSettings> {
+  public async updateSettings(
+    newSettings: Partial<SystemSettings>,
+    actor?: { id?: string; name?: string; ipAddress?: string }
+  ): Promise<SystemSettings> {
     const updated = await adminRepository.updateSystemSettings(newSettings);
-    await this.recordAudit('SETTINGS_UPDATED', 'Settings', 'primary', 'System Settings', 'Updated platform settings');
+    await this.recordAudit(
+      'SETTINGS_UPDATED',
+      'Settings',
+      'primary',
+      'System Settings',
+      'Updated platform settings',
+      actor?.id,
+      actor?.name,
+      actor?.ipAddress
+    );
     return updated;
   }
 
@@ -200,9 +212,9 @@ export class AdminService {
     targetId: string,
     targetSummary: string,
     details: string,
-    adminId = 'adm_1',
-    adminName = 'Super Administrator',
-    ipAddress = '127.0.0.1'
+    adminId = 'system',
+    adminName = 'Administrator',
+    ipAddress = 'unknown'
   ): Promise<AuditLog> {
     return await adminRepository.createAuditLog({
       adminId,

@@ -15,7 +15,11 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    const updated = await adminService.updateSettings(body);
+    const updated = await adminService.updateSettings(body, {
+      id: authContext.userId,
+      name: authContext.user.name,
+      ipAddress: authContext.ipAddress,
+    });
     return NextResponse.json(updated);
   } catch (error: any) {
     console.error('API /api/admin/settings PUT error:', error);

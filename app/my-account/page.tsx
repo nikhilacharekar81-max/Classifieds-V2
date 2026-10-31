@@ -1,4 +1,3 @@
-import { AppProvider } from '@/context/AppContext';
 import { AppClientRouter } from '@/components/AppClientRouter';
 import type { Metadata } from 'next';
 
@@ -8,9 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function MyAccountPage() {
-  return (
-    <AppProvider>
-      <AppClientRouter />
-    </AppProvider>
-  );
+  return <AppClientRouter initialPath="/my-account" />;
 }

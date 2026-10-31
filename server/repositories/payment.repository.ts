@@ -1,7 +1,7 @@
 import { db } from '@/src/db/index';
 import * as schema from '@/src/db/schema';
 import { eq, sql } from 'drizzle-orm';
-import { Listing } from '@/lib/types';
+import crypto from 'node:crypto';
 
 export class PaymentRepository {
   /**
@@ -23,16 +23,23 @@ export class PaymentRepository {
   }
 
   /**
-   * Durably records webhook event to enforce idempotency.
+   * Atomically claims and records a non-payment webhook event using PostgreSQL ON CONFLICT DO NOTHING.
+   * Returns true if newly recorded, false if already processed (idempotent duplicate).
    */
-  public async recordWebhookEvent(eventId: string, gateway: string, orderId: string, payload: any): Promise<void> {
+  public async recordWebhookEvent(eventId: string, gateway: string, orderId: string, payload: any): Promise<boolean> {
     try {
-      await db.insert(schema.paymentWebhookEvents).values({
-        id: eventId,
-        gateway,
-        orderId,
-        payload,
-      });
+      const inserted = await db
+        .insert(schema.paymentWebhookEvents)
+        .values({
+          id: eventId,
+          gateway,
+          orderId,
+          payload,
+        })
+        .onConflictDoNothing()
+        .returning({ id: schema.paymentWebhookEvents.id });
+
+      return inserted.length > 0;
     } catch (error) {
       console.error('PaymentRepository.recordWebhookEvent error:', error);
       throw new Error(`Failed to record webhook event ${eventId}`, { cause: error });
@@ -41,6 +48,7 @@ export class PaymentRepository {
 
   /**
    * Atomically executes the PostgreSQL transaction to activate boost upon verified payment.
+   * Prevents race conditions and duplicate processing via ON CONFLICT DO NOTHING and SELECT ... FOR UPDATE.
    */
   public async activateBoostInTransaction(params: {
     orderId: string;
@@ -49,9 +57,45 @@ export class PaymentRepository {
     invoiceNumber: string;
     eventId?: string;
     webhookPayload?: any;
-  }): Promise<{ success: boolean; listingId: string; invoiceNumber: string }> {
+    verifiedAmount?: number;
+    verifiedCurrency?: string;
+  }): Promise<{ success: boolean; duplicate?: boolean; listingId: string; invoiceNumber: string }> {
     return await db.transaction(async (tx) => {
-      // 1. Fetch Order
+      // 1. Atomic idempotency claim for webhook events inside the transaction
+      if (params.eventId) {
+        const claimed = await tx
+          .insert(schema.paymentWebhookEvents)
+          .values({
+            id: params.eventId,
+            gateway: params.paymentGateway,
+            orderId: params.orderId,
+            payload: params.webhookPayload || {},
+          })
+          .onConflictDoNothing()
+          .returning({ id: schema.paymentWebhookEvents.id });
+
+        if (claimed.length === 0) {
+          // Concurrent or prior request already processed this eventId
+          const existingOrder = await tx
+            .select({ listingId: schema.boostOrders.listingId })
+            .from(schema.boostOrders)
+            .where(eq(schema.boostOrders.orderId, params.orderId))
+            .limit(1);
+
+          return {
+            success: true,
+            duplicate: true,
+            listingId: existingOrder[0]?.listingId || '',
+            invoiceNumber: params.invoiceNumber,
+          };
+        }
+      }
+
+      // 2. Row-level lock on boost_orders to prevent concurrent duplicate activations on the same order
+      await tx.execute(
+        sql`SELECT order_id FROM boost_orders WHERE order_id = ${params.orderId} FOR UPDATE`
+      );
+
       const orderRows = await tx
         .select()
         .from(schema.boostOrders)
@@ -64,10 +108,35 @@ export class PaymentRepository {
       const order = orderRows[0];
 
       if (order.status === 'completed') {
-        return { success: true, listingId: order.listingId, invoiceNumber: params.invoiceNumber };
+        return {
+          success: true,
+          duplicate: true,
+          listingId: order.listingId,
+          invoiceNumber: params.invoiceNumber,
+        };
       }
 
-      // 2. Fetch Package
+      // 3. Authoritative amount and currency verification against stored pending order
+      const expectedTotal = Number(order.totalAmount);
+      if (
+        params.verifiedAmount !== undefined &&
+        Math.abs(Number(params.verifiedAmount) - expectedTotal) >= 0.01
+      ) {
+        throw new Error(
+          `Payment amount mismatch: expected ${expectedTotal.toFixed(2)}, received ${Number(params.verifiedAmount).toFixed(2)}`
+        );
+      }
+
+      if (
+        params.verifiedCurrency !== undefined &&
+        params.verifiedCurrency.toUpperCase() !== order.currency.toUpperCase()
+      ) {
+        throw new Error(
+          `Payment currency mismatch: expected ${order.currency}, received ${params.verifiedCurrency}`
+        );
+      }
+
+      // 4. Fetch Package
       const pkgRows = await tx
         .select()
         .from(schema.boostPackages)
@@ -78,13 +147,13 @@ export class PaymentRepository {
       const pkgName = pkg ? pkg.name : 'Boost Package';
       const durationHours = order.durationHours || (pkg ? pkg.durationHours : 24);
 
-      // 3. Update Order Status
+      // 5. Update Order Status
       await tx
         .update(schema.boostOrders)
         .set({ status: 'completed' })
         .where(eq(schema.boostOrders.orderId, params.orderId));
 
-      // 4. Update Listing: Activate Boost
+      // 6. Update Listing: Activate Boost
       const now = new Date();
       const expiresAt = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
 
@@ -104,14 +173,14 @@ export class PaymentRepository {
         })
         .where(eq(schema.listings.id, order.listingId));
 
-      // 5. Update Package Sales Count
+      // 7. Update Package Sales Count
       await tx
         .update(schema.boostPackages)
         .set({ salesCount: sql`${schema.boostPackages.salesCount} + 1` })
         .where(eq(schema.boostPackages.id, order.packageId));
 
-      // 6. Insert Transaction Record
-      const txId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      // 8. Insert Transaction Record with collision-resistant UUID
+      const txId = `tx_${crypto.randomUUID()}`;
       await tx.insert(schema.boostTransactions).values({
         id: txId,
         orderId: order.orderId,
@@ -127,18 +196,9 @@ export class PaymentRepository {
         status: 'completed',
       });
 
-      // 7. Record durable idempotency event if provided
-      if (params.eventId) {
-        await tx.insert(schema.paymentWebhookEvents).values({
-          id: params.eventId,
-          gateway: params.paymentGateway,
-          orderId: order.orderId,
-          payload: params.webhookPayload || {},
-        });
-      }
-
       return {
         success: true,
+        duplicate: false,
         listingId: order.listingId,
         invoiceNumber: params.invoiceNumber,
       };

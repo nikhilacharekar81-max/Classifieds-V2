@@ -64,6 +64,7 @@ describe('Listing Security & RBAC Enforcement', () => {
 
   afterAll(async () => {
     if (createdListingId) {
+      await db.delete(schema.auditLogs).where(eq(schema.auditLogs.targetId, createdListingId));
       await db.delete(schema.listings).where(eq(schema.listings.id, createdListingId));
     }
     await db.delete(schema.userSessions).where(eq(schema.userSessions.userId, sellerId));
@@ -92,12 +93,52 @@ describe('Listing Security & RBAC Enforcement', () => {
     expect(data.error).toContain('Authentication required');
   });
 
-  it('authenticates user via session and strips client-supplied status, sellerId, and featured flags', async () => {
+  it('rejects x-user-id header spoofing attempt and refuses to impersonate another user or admin', async () => {
+    // Attempt 1: Spoof sellerId via x-user-id header without a valid session token
+    const spoofSellerReq = new NextRequest('http://localhost:3000/api/listings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': sellerId,
+      },
+      body: JSON.stringify({
+        title: 'Spoofed Header Listing',
+        description: 'Attempted via x-user-id header bypass',
+        price: 5000,
+        categoryId: 'cat_mobiles',
+      }),
+    });
+
+    const spoofSellerRes = await createListingHandler(spoofSellerReq);
+    expect(spoofSellerRes.status).toBe(401);
+
+    // Attempt 2: Spoof super_admin via x-user-id header on bulk moderation endpoint
+    const spoofAdminReq = new NextRequest('http://localhost:3000/api/listings/bulk-action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': adminUserId,
+      },
+      body: JSON.stringify({
+        action: 'approve',
+        ids: ['lst_1001'],
+      }),
+    });
+
+    const spoofAdminRes = await bulkActionHandler(spoofAdminReq);
+    expect(spoofAdminRes.status).toBe(401);
+  });
+
+  it('authenticates user via session, strips client privilege-escalation fields, and logs real actor & IP in audit_logs', async () => {
+    const clientIp = '203.0.113.42';
     const req = new NextRequest('http://localhost:3000/api/listings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${sessionToken}`,
+        'x-forwarded-for': `${clientIp}, 10.0.0.1`,
+        // Even if attacker also passes another user's x-user-id, session identity wins:
+        'x-user-id': otherUserId,
       },
       body: JSON.stringify({
         title: `Security Test Bike ${Date.now()}`,
@@ -132,6 +173,16 @@ describe('Listing Security & RBAC Enforcement', () => {
     expect(row.sellerId).toBe(sellerId);
     expect(row.status).toBe('pending');
     expect(row.isFeatured).toBe(false);
+
+    // Verify audit_logs recorded real authenticated user and client IP instead of hardcoded 127.0.0.1
+    const [auditRow] = await db
+      .select()
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.targetId, createdListingId));
+    expect(auditRow).toBeDefined();
+    expect(auditRow.adminId).toBe(sellerId);
+    expect(auditRow.adminName).toBe('Authorized Seller');
+    expect(auditRow.ipAddress).toBe(clientIp);
   });
 
   it('prevents anonymous users from querying non-approved listings', async () => {

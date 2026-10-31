@@ -53,30 +53,49 @@ export default async function CityPage({ params }: CityPageProps) {
 
   return (
     <>
-      {/* Semantic Server-Rendered HTML for Crawlers & Initial Paint */}
-      <section className="sr-only" aria-label={`Marketplace directory for ${cityName}`}>
-        <h1>Classifieds in {cityName}</h1>
-        <p>
-          Browse top verified listings across {categories.length} categories in {cityName}.
-          Direct seller contact, zero commissions, and instant community chat.
-        </p>
-        <div>
-          <h2>Featured Ads in {cityName}</h2>
-          <ul>
-            {listingsData.items.map((item) => (
-              <li key={item.id}>
-                <Link href={`/${city}/${item.categoryId}/${item.id}`}>
-                  {item.title} — ₹{item.price.toLocaleString('en-IN')} in {item.location.locality}
-                </Link>
-                <p>{item.description.slice(0, 120)}...</p>
-              </li>
-            ))}
-          </ul>
+      {/* Interactive Marketplace Interface */}
+      <AppClientRouter initialPath={`/${city}`} />
+
+      {/* Visible Server-Rendered HTML from PostgreSQL */}
+      <section
+        className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-8 px-4 sm:px-6 lg:px-8"
+        aria-label={`Marketplace directory for ${cityName}`}
+      >
+        <div className="max-w-7xl mx-auto space-y-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+              Classifieds in {cityName}
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              Browse top verified listings across {categories.length} categories in {cityName}.
+              Direct seller contact, zero commissions, and instant community chat.
+            </p>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+              Featured Ads in {cityName}
+            </h2>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {listingsData.items.map((item) => (
+                <li
+                  key={item.id}
+                  className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/50"
+                >
+                  <Link
+                    href={`/${city}/${item.categoryId}/${item.id}`}
+                    className="text-sm font-semibold text-slate-900 dark:text-white hover:text-emerald-600"
+                  >
+                    {item.title} — ₹{item.price.toLocaleString('en-IN')} in {item.location.locality}
+                  </Link>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {item.description.slice(0, 120)}...
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
-
-      {/* Interactive Marketplace Interface */}
-      <AppClientRouter />
     </>
   );
 }

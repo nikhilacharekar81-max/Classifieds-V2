@@ -179,7 +179,7 @@ function renderAdminModule(path: string, activeSidebarTab: string) {
   }
 }
 
-export function AppClientRouter() {
+export function AppClientRouter({ initialPath }: { initialPath?: string } = {}) {
   const {
     activeSidebarTab,
     setActiveSidebarTab,
@@ -195,7 +195,7 @@ export function AppClientRouter() {
     selectedMarketplaceSubcategory,
     setSelectedMarketplaceSubcategory,
   } = useApp();
-  const { path } = useRouter();
+  const { path } = useRouter(initialPath);
 
   const parsedRoute = useMemo(() => {
     return parseChillyPath(path, locations, categories);

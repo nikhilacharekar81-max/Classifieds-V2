@@ -29,19 +29,25 @@ export async function POST(req: NextRequest) {
     }
 
     const { action, reportId, note, actionType, targetListingId, ruleData } = await req.json();
+    const actor = {
+      id: authContext.userId,
+      name: authContext.user.name,
+      ipAddress: authContext.ipAddress,
+    };
 
     if (action === 'action_report' && reportId) {
       const success = await moderationService.actionReport(
         reportId,
         note || 'Action taken by moderator',
         actionType || 'actioned',
-        targetListingId
+        targetListingId,
+        actor
       );
       return NextResponse.json({ success });
     }
 
     if (action === 'add_rule' && ruleData) {
-      const rule = await moderationService.addRule(ruleData);
+      const rule = await moderationService.addRule(ruleData, actor);
       return NextResponse.json(rule);
     }
 
