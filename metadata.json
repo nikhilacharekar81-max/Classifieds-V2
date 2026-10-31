@@ -1,0 +1,6 @@
+{
+  "name": "Classifieds V2",
+  "description": "Production-grade, server-side rendered Classifieds marketplace and enterprise administration suite featuring verified seller listings, dynamic category attributes, duplicate title protection, and ad boost monetization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

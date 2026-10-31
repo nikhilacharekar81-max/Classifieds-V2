@@ -1,0 +1,6 @@
+{
+  "summary":  "Classifieds V2 Master Architecture and Rebuild Specification fully verified and aligned. Features 100% preservation across all 15 public screens and all 15 admin modules, strict anti-split-brain domain architecture, Drizzle ORM on PostgreSQL, server-side rendered (SSR) hierarchical URLs, HMAC-verified payments with durable webhook idempotency, and clean zero-error Next.js 15 App Router compilation.",
+  "updatedAt":  "2026-10-31T14:26:25.747105260Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
