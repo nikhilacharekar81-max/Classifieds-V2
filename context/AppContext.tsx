@@ -64,7 +64,7 @@ interface AppContextType {
   setMobileSidebarOpen: (open: boolean) => void;
 
   // Current logged in admin & permissions
-  currentAdmin: AdminUser;
+  currentAdmin: AdminUser | null;
   switchAdminRole: (role: Role) => void;
   impersonatedUser: UserAccount | null;
   impersonateUser: (user: UserAccount) => void;
@@ -238,9 +238,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
 
   // Admin and Auth
-  const [currentAdmin, setCurrentAdmin] = useState<AdminUser>(INITIAL_ADMINS[0]);
+  const [authUser, setAuthUser] = useState<UserAccount | null>(null);
+  const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
   const [impersonatedUser, setImpersonatedUser] = useState<UserAccount | null>(null);
-  const [activeUserId, setActiveUserId] = useState<string>(INITIAL_USERS[0].id);
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated && data.user) {
+          setAuthUser(data.user);
+          setActiveUserId(data.user.id);
+          if (data.isAdmin || data.isModerator) {
+            setCurrentAdmin({
+              id: data.user.id,
+              name: data.user.name,
+              email: data.user.email,
+              avatar: data.user.avatar || 'https://picsum.photos/seed/admin/100/100',
+              role: data.adminRole || (data.isAdmin ? 'super_admin' : 'moderator'),
+              twoFactorEnabled: false,
+              lastLogin: 'Just now',
+              ipAddress: '127.0.0.1',
+              status: 'active',
+            });
+          } else {
+            setCurrentAdmin(null);
+          }
+        } else {
+          setAuthUser(null);
+          setCurrentAdmin(null);
+          setActiveUserId(null);
+        }
+      })
+      .catch(() => {
+        setAuthUser(null);
+        setCurrentAdmin(null);
+        setActiveUserId(null);
+      });
+  }, []);
 
   // Collections (initialized from server-fetched PostgreSQL data during SSR when provided)
   const [listings, setListings] = useState<Listing[]>(() =>
@@ -509,14 +545,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
   ) => {
     const newLog: AuditLog = {
       id: 'aud_' + Date.now(),
-      adminId: currentAdmin.id,
-      adminName: currentAdmin.name,
+      adminId: currentAdmin?.id || currentUser?.id || 'system',
+      adminName: currentAdmin?.name || currentUser?.name || 'System User',
       action,
       module,
       targetId,
       targetSummary,
       details,
-      ipAddress: currentAdmin.ipAddress.split(' ')[0] || 'unknown',
+      ipAddress: currentAdmin?.ipAddress ? currentAdmin.ipAddress.split(' ')[0] : 'unknown',
       timestamp: new Date().toLocaleString('en-US', {
         dateStyle: 'short',
         timeStyle: 'short',
@@ -527,11 +563,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
 
   // Role switching
   const switchAdminRole = (role: Role) => {
-    const matched = INITIAL_ADMINS.find(a => a.role === role) || {
-      ...currentAdmin,
-      role,
-    };
-    setCurrentAdmin(matched);
+    const matched = INITIAL_ADMINS.find(a => a.role === role);
+    if (matched) {
+      setCurrentAdmin(matched);
+    } else if (currentAdmin) {
+      setCurrentAdmin({
+        ...currentAdmin,
+        role,
+      });
+    } else {
+      return;
+    }
     addToast({
       type: 'info',
       title: `Switched Role to ${role.replace('_', ' ').toUpperCase()}`,
@@ -543,7 +585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
   const impersonateUser = (user: UserAccount) => {
     setImpersonatedUser(user);
     setViewMode('marketplace');
-    recordAuditLog('IMPERSONATE_USER', 'Users / Impersonation', user.id, user.name, `Admin ${currentAdmin.name} started impersonation session for audit`);
+    recordAuditLog('IMPERSONATE_USER', 'Users / Impersonation', user.id, user.name, `Admin ${currentAdmin?.name || 'System'} started impersonation session for audit`);
     addToast({
       type: 'warning',
       title: `Impersonating ${user.name}`,
@@ -553,7 +595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
 
   const exitImpersonation = () => {
     if (impersonatedUser) {
-      recordAuditLog('EXIT_IMPERSONATION', 'Users / Impersonation', impersonatedUser.id, impersonatedUser.name, `Admin ${currentAdmin.name} ended impersonation session`);
+      recordAuditLog('EXIT_IMPERSONATION', 'Users / Impersonation', impersonatedUser.id, impersonatedUser.name, `Admin ${currentAdmin?.name || 'System'} ended impersonation session`);
     }
     setImpersonatedUser(null);
     setViewMode('admin');
@@ -1833,38 +1875,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
         transaction,
       };
     } catch (err: any) {
-      // Fallback local update for preview resilience
-      const durationHours = pkg.durationHours || pkg.durationDays * 24;
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + durationHours * 3600000).toISOString();
-      const fallbackListing: Listing = {
-        ...listing,
-        isBoosted: true,
-        boostStatus: 'active',
-        boostStartedAt: now.toISOString(),
-        boostExpiresAt: expiresAt,
-        boostPackageId: pkg.id,
-        boostPackageName: pkg.name,
-        boostPrice: pkg.price,
-        boostDurationHours: durationHours,
-        boostPaymentId: `pay_fallback_${Date.now()}`,
-      };
-
-      setListings(prev => prev.map(l => (l.id === listingId ? fallbackListing : l)));
-      setPackages(prev =>
-        prev.map(p => (p.id === packageId ? { ...p, salesCount: (p.salesCount || 0) + 1 } : p))
-      );
-
       addToast({
-        type: 'success',
-        title: 'Ad Boosted to Top!',
-        message: `"${listing.title}" is now boosted for ${durationHours} hours.`,
+        type: 'error',
+        title: 'Boost Payment Failed',
+        message: err.message || 'Unable to complete boost order verification.',
       });
 
       return {
-        success: true,
-        message: 'Ad boosted successfully',
-        listing: fallbackListing,
+        success: false,
+        message: err.message || 'Payment processing failed. Please try again.',
       };
     }
   };
@@ -1890,7 +1909,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     });
   };
 
-  const currentUser = impersonatedUser || users.find(u => u.id === activeUserId) || users[0];
+  const currentUser = impersonatedUser || authUser || (activeUserId ? users.find(u => u.id === activeUserId) : null) || users[0];
 
   return (
     <AppContext.Provider

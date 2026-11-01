@@ -46,6 +46,10 @@ export const AdminHeader: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  if (!currentAdmin) {
+    return null;
+  }
+
   const rolesList: { role: Role; label: string; desc: string }[] = [
     { role: 'super_admin', label: 'Super Admin', desc: 'Full administrative access & system config' },
     { role: 'moderator', label: 'Moderator', desc: 'Listing approvals, reports & user sanctions' },

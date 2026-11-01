@@ -11,6 +11,7 @@ import { eq, inArray } from 'drizzle-orm';
 describe('Payment & Webhook Fail-Closed Verification, Atomic Idempotency & ACID', () => {
   const testUserId = `usr_pay_${Date.now()}`;
   const testUserSession = `sess_pay_${Date.now()}`;
+  const testListingId0 = `lst_pay_0_${Date.now()}`;
   const testListingId1 = `lst_pay_1_${Date.now()}`;
   const testListingId2 = `lst_pay_2_${Date.now()}`;
   const testPackageId = 'pkg_boost_7d';
@@ -43,6 +44,19 @@ describe('Payment & Webhook Fail-Closed Verification, Atomic Idempotency & ACID'
     });
 
     await db.insert(schema.listings).values([
+      {
+        id: testListingId0,
+        sellerId: testUserId,
+        categoryId: 'cat_cars',
+        title: `Payment Test Listing Zero ${Date.now()}`,
+        description: 'Test car 0 for boost creation',
+        price: '400000',
+        state: 'Maharashtra',
+        city: 'Mumbai',
+        locality: 'Colaba',
+        status: 'approved',
+        expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000),
+      },
       {
         id: testListingId1,
         sellerId: testUserId,
@@ -107,7 +121,7 @@ describe('Payment & Webhook Fail-Closed Verification, Atomic Idempotency & ACID'
     await db.delete(schema.paymentWebhookEvents).where(eq(schema.paymentWebhookEvents.id, testEventId));
     await db.delete(schema.boostTransactions).where(inArray(schema.boostTransactions.orderId, createdOrderIds));
     await db.delete(schema.boostOrders).where(inArray(schema.boostOrders.orderId, createdOrderIds));
-    await db.delete(schema.listings).where(inArray(schema.listings.id, [testListingId1, testListingId2]));
+    await db.delete(schema.listings).where(inArray(schema.listings.id, [testListingId0, testListingId1, testListingId2]));
     await db.delete(schema.userSessions).where(eq(schema.userSessions.id, testUserSession));
     await db.delete(schema.users).where(eq(schema.users.id, testUserId));
   });
@@ -124,7 +138,7 @@ describe('Payment & Webhook Fail-Closed Verification, Atomic Idempotency & ACID'
         Authorization: `Bearer ${testUserSession}`,
       },
       body: JSON.stringify({
-        listingId: testListingId1,
+        listingId: testListingId0,
         packageId: testPackageId,
       }),
     });

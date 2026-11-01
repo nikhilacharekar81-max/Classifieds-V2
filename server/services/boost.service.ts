@@ -103,6 +103,16 @@ export class BoostService {
       };
     }
 
+    // 5. Check for existing pending order on this listing to prevent concurrent pending orders
+    const existingPending = await boostRepository.findPendingOrderByListingId(listingId);
+    if (existingPending) {
+      return {
+        success: false,
+        error: 'A pending boost order already exists for this listing.',
+        status: 409,
+      };
+    }
+
     // 5. Look up package in database (never from client)
     const pkg = await boostRepository.findPackageById(packageId);
     if (!pkg || !pkg.isActive) {

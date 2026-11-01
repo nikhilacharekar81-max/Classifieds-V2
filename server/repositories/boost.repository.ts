@@ -155,6 +155,25 @@ export class BoostRepository {
     }
   }
 
+  public async findPendingOrderByListingId(listingId: string): Promise<typeof schema.boostOrders.$inferSelect | null> {
+    try {
+      const rows = await db
+        .select()
+        .from(schema.boostOrders)
+        .where(
+          and(
+            eq(schema.boostOrders.listingId, listingId),
+            eq(schema.boostOrders.status, 'pending')
+          )
+        )
+        .limit(1);
+      return rows[0] || null;
+    } catch (error) {
+      console.error(`BoostRepository.findPendingOrderByListingId error:`, error);
+      return null;
+    }
+  }
+
   public async findAllTransactions(): Promise<OrderTransaction[]> {
     try {
       const rows = await db.select().from(schema.boostTransactions).orderBy(desc(schema.boostTransactions.createdAt));

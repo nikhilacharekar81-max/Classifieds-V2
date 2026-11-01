@@ -1,22 +1,37 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, PoolConfig } from 'pg';
 import * as schema from './schema';
 
 declare global {
-  // eslint-disable-next-line no-var
   var _postgresPool: Pool | undefined;
 }
 
 export const createPool = () => {
   if (!global._postgresPool) {
-    global._postgresPool = new Pool({
-      host: process.env.SQL_HOST,
-      user: process.env.SQL_USER,
-      password: process.env.SQL_PASSWORD,
-      database: process.env.SQL_DB_NAME,
+    const poolConfig: PoolConfig = {
       max: 10,
       connectionTimeoutMillis: 15000,
-    });
+    };
+
+    if (process.env.DATABASE_URL) {
+      poolConfig.connectionString = process.env.DATABASE_URL;
+      if (process.env.SQL_SSL === 'true') {
+        poolConfig.ssl = { rejectUnauthorized: false };
+      }
+    } else {
+      poolConfig.host = process.env.SQL_HOST;
+      poolConfig.user = process.env.SQL_USER;
+      poolConfig.password = process.env.SQL_PASSWORD;
+      poolConfig.database = process.env.SQL_DB_NAME;
+      if (process.env.SQL_PORT) {
+        poolConfig.port = Number(process.env.SQL_PORT);
+      }
+      if (process.env.SQL_SSL === 'true') {
+        poolConfig.ssl = { rejectUnauthorized: false };
+      }
+    }
+
+    global._postgresPool = new Pool(poolConfig);
 
     global._postgresPool.on('error', (err) => {
       console.error('Unexpected error on idle SQL pool client:', err);
