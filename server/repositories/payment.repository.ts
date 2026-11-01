@@ -107,13 +107,16 @@ export class PaymentRepository {
       }
       const order = orderRows[0];
 
-      if (order.status === 'completed') {
-        return {
-          success: true,
-          duplicate: true,
-          listingId: order.listingId,
-          invoiceNumber: params.invoiceNumber,
-        };
+      if (order.status !== 'pending') {
+        if (order.status === 'completed') {
+          return {
+            success: true,
+            duplicate: true,
+            listingId: order.listingId,
+            invoiceNumber: params.invoiceNumber,
+          };
+        }
+        throw new Error(`Order ${params.orderId} cannot be activated from status '${order.status}' (must be pending)`);
       }
 
       // 3. Authoritative amount and currency verification against stored pending order

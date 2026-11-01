@@ -31,7 +31,7 @@ export class ListingService {
   public async createListing(
     data: Omit<Listing, 'id' | 'createdAt' | 'views' | 'likes' | 'chatsCount'>,
     authenticatedUserId?: string,
-    actorMeta?: { name?: string; ipAddress?: string }
+    actorMeta?: { name?: string; ipAddress?: string; isAdminAction?: boolean }
   ): Promise<{ success: boolean; listing?: Listing; error?: string; status: number }> {
     const norm = normalizeAdTitle(data.title);
     if (!norm) {
@@ -41,6 +41,26 @@ export class ListingService {
     const sellerId = authenticatedUserId || data.sellerId;
     if (!sellerId) {
       return { success: false, error: 'Seller authentication required', status: 401 };
+    }
+
+    // Validate price
+    const priceNum = Number(data.price);
+    if (isNaN(priceNum) || !isFinite(priceNum) || priceNum < 0) {
+      return { success: false, error: 'Price must be a non-negative number', status: 400 };
+    }
+
+    // Validate location coordinates if supplied
+    if (data.location?.latitude !== undefined && data.location?.latitude !== null) {
+      const lat = Number(data.location.latitude);
+      if (isNaN(lat) || lat < -90 || lat > 90) {
+        return { success: false, error: 'Invalid latitude coordinate (-90 to 90)', status: 400 };
+      }
+    }
+    if (data.location?.longitude !== undefined && data.location?.longitude !== null) {
+      const lng = Number(data.location.longitude);
+      if (isNaN(lng) || lng < -180 || lng > 180) {
+        return { success: false, error: 'Invalid longitude coordinate (-180 to 180)', status: 400 };
+      }
     }
 
     // Enforce PostgreSQL partial unique index check
@@ -67,7 +87,7 @@ export class ListingService {
         subcategoryId: data.subcategoryId,
         title: data.title,
         description: data.description,
-        price: data.price,
+        price: priceNum,
         state: data.location?.state || 'Maharashtra',
         city: data.location?.city || 'Mumbai',
         locality: data.location?.locality || 'Locality',
@@ -79,17 +99,19 @@ export class ListingService {
         expiresAt,
       });
 
-      // Audit log in PostgreSQL with real actor and IP metadata
-      await adminRepository.createAuditLog({
-        adminId: sellerId,
-        adminName: actorMeta?.name || data.sellerName || 'Authenticated User',
-        action: 'LISTING_CREATED',
-        module: 'Marketplace',
-        targetId: id,
-        targetSummary: created.title,
-        details: `Created listing in ${created.location.city}`,
-        ipAddress: actorMeta?.ipAddress || 'unknown',
-      });
+      // Record audit log for listing creation with actor metadata and client IP address
+      if (sellerId) {
+        await adminRepository.createAuditLog({
+          adminId: sellerId,
+          adminName: actorMeta?.name || data.sellerName || 'Authenticated User',
+          action: actorMeta?.isAdminAction ? 'ADMIN_LISTING_CREATED' : 'USER_LISTING_CREATED',
+          module: 'Marketplace',
+          targetId: id,
+          targetSummary: created.title,
+          details: `Created listing in ${created.location.city}`,
+          ipAddress: actorMeta?.ipAddress || 'unknown',
+        });
+      }
 
       return { success: true, listing: created, status: 201 };
     } catch (err: any) {
@@ -117,6 +139,14 @@ export class ListingService {
     const targetTitle = updatedData.title !== undefined ? updatedData.title : existing.title;
     const sellerId = existing.sellerId;
 
+    // Validate price if updated
+    if (updatedData.price !== undefined) {
+      const p = Number(updatedData.price);
+      if (isNaN(p) || !isFinite(p) || p < 0) {
+        return { success: false, error: 'Price must be a non-negative number', status: 400 };
+      }
+    }
+
     // Duplicate title check if title changed
     if (normalizeAdTitle(targetTitle) !== normalizeAdTitle(existing.title)) {
       const dupCheck = await listingRepository.checkDuplicateActiveTitle(sellerId, targetTitle, id);
@@ -136,8 +166,12 @@ export class ListingService {
       if (updatedData.location.city) safeFields.city = updatedData.location.city;
       if (updatedData.location.state) safeFields.state = updatedData.location.state;
       if (updatedData.location.locality) safeFields.locality = updatedData.location.locality;
-      if (updatedData.location.latitude) safeFields.latitude = updatedData.location.latitude;
-      if (updatedData.location.longitude) safeFields.longitude = updatedData.location.longitude;
+      if (updatedData.location.latitude !== undefined && updatedData.location.latitude !== null) {
+        safeFields.latitude = updatedData.location.latitude;
+      }
+      if (updatedData.location.longitude !== undefined && updatedData.location.longitude !== null) {
+        safeFields.longitude = updatedData.location.longitude;
+      }
     }
 
     // Admin-only fields
@@ -188,7 +222,7 @@ export class ListingService {
   }
 
   public async bulkRenew(ids: string[], days: number = 30): Promise<number> {
-    const res = await listingRepository.bulkRenew(ids);
+    const res = await listingRepository.bulkRenew(ids, days);
     return res.renewedCount;
   }
 

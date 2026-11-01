@@ -5,9 +5,11 @@ import { getAuthenticatedUser } from '@/lib/auth/session';
 export async function GET(req: NextRequest) {
   try {
     const authContext = await getAuthenticatedUser(req);
-    // Allow admin access or dev preview
-    if (authContext && !authContext.isAdmin) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!authContext) {
+      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    }
+    if (!authContext.isAdmin && !authContext.isModerator && !authContext.isFinance) {
+      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
     const metrics = await adminService.getDashboardMetrics();

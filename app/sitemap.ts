@@ -35,7 +35,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
 
   // Dynamic city routes
-  const cities = allLocations.filter((l) => l.type === 'city' && l.isActive);
+  const cities = allLocations.filter((l) => l.type === 'city');
   const cityRoutes: MetadataRoute.Sitemap = cities.map((city) => ({
     url: `${baseUrl}/${slugify(city.name)}`,
     lastModified: now,

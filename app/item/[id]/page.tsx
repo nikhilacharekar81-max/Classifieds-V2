@@ -2,7 +2,7 @@ import { AppClientRouter } from '@/components/AppClientRouter';
 import { listingRepository } from '@/server/repositories/listing.repository';
 import { categoryRepository } from '@/server/repositories/category.repository';
 import { locationRepository } from '@/server/repositories/location.repository';
-import { buildChillyUrl } from '@/lib/utils/seoAndUrlHelper';
+import { buildChillyUrl, serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
@@ -87,7 +87,7 @@ export default async function ItemDetailPage({
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <AppClientRouter
         initialPath={`/item/${id}`}

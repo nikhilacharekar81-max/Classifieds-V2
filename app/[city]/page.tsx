@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { locationRepository } from '@/server/repositories/location.repository';
 import { categoryRepository } from '@/server/repositories/category.repository';
 import { listingRepository } from '@/server/repositories/listing.repository';
 import { AppClientRouter } from '@/components/AppClientRouter';
-import { stripChillySuffixes, unslugifyCity } from '@/lib/utils/seoAndUrlHelper';
+import { stripChillySuffixes, unslugifyCity, serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 
 interface CityPageProps {
   params: Promise<{ city: string }>;
@@ -64,12 +65,18 @@ export default async function CityPage({ params, searchParams }: CityPageProps) 
 
   const { cleanSlug } = stripChillySuffixes(city);
 
-  const [listingsData, categories, locations, loc] = await Promise.all([
+  const [listingsData, categories, locations, loc, cat] = await Promise.all([
     listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
     categoryRepository.findAll(),
     locationRepository.findAll(),
     locationRepository.findBySlug(cleanSlug).then((r) => r || locationRepository.findBySlug(city)),
+    categoryRepository.findBySlug(cleanSlug).then((r) => r || categoryRepository.findBySlug(city)),
   ]);
+
+  const isSpecialCity = cleanSlug === 'all-india' || cleanSlug === 'india' || cleanSlug === 'all';
+  if (!loc && !cat && !isSpecialCity) {
+    notFound();
+  }
 
   const cityName = loc ? loc.name : unslugifyCity(city, locations).cityName;
 
@@ -96,7 +103,7 @@ export default async function CityPage({ params, searchParams }: CityPageProps) 
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
       />
       <AppClientRouter
         initialPath={`/${city}`}
@@ -110,3 +117,4 @@ export default async function CityPage({ params, searchParams }: CityPageProps) 
     </>
   );
 }
+

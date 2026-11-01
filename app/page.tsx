@@ -2,6 +2,7 @@ import { AppClientRouter } from '@/components/AppClientRouter';
 import { listingRepository } from '@/server/repositories/listing.repository';
 import { categoryRepository } from '@/server/repositories/category.repository';
 import { locationRepository } from '@/server/repositories/location.repository';
+import { serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -52,7 +53,7 @@ export default async function HomePage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <AppClientRouter
         initialPath="/"
@@ -65,3 +66,4 @@ export default async function HomePage() {
     </>
   );
 }
+

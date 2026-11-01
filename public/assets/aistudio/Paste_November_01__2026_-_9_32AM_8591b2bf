@@ -1,0 +1,991 @@
+🔴 P0 — Authentication/session findings
+1. Banned users can still authenticate through existing PostgreSQL sessions
+findSession() verifies only that:
+AND
+session has not expired
+
+It does not verify:
+
+
+before returning the authenticated user. 
+
+So:
+Admin bans user
+       ↓
+existing session remains
+       ↓
+getAuthenticatedUser()
+       ↓
+authenticated user returned
+
+This is a genuine access-control failure.
+
+🔴 Critical
+2. Firebase authentication also ignores application ban status
+The Firebase path verifies the Firebase token and then returns the PostgreSQL user.
+
+There is no:
+status === active
+
+gate after Firebase authentication.
+
+Therefore banning a user in PostgreSQL does not necessarily revoke their Firebase-based access.
+
+🔴 Critical
+3. Firebase token revocation is not checked
+The server calls:
+verifyIdToken(token)
+
+rather than demonstrating a revoked-token check.
+
+That means a Firebase token can remain valid until its normal expiry even after Firebase-side revocation.
+
+🟠 Security hardening / potentially high depending on account lifecycle
+4. Firebase email fallback can bind an identity by email
+The authentication sequence is:
+findByUid(decoded.uid)
+↓
+if not found
+findByEmail(decoded.email)
+↓
+use that PostgreSQL account
+
+This is a dangerous identity-linking rule.
+
+A verified Firebase identity should normally be linked to the application's immutable external identity (uid), not silently reassigned to an existing account merely because the email matches.
+
+At minimum the system needs an explicit, safe account-linking policy.
+
+🔴 High
+5. Firebase auto-provisioning has no explicit application onboarding gate
+If no user exists, authentication automatically creates one:
+usr_${decoded.uid.slice(0,12)}
+
+There is no demonstrated check for:
+- application account eligibility
+- terms acceptance
+- age requirement
+- account status
+- duplicate-account policy
+- required profile completion
+- phone verification policy
+This may be intentional, but it is a security/business-flow decision currently being made implicitly.
+
+🟠 High-risk design gap
+6. Cookie name is inconsistent with the documented configuration
+.env.example says:
+chillyads_session
+
+but authentication reads:
+session_token
+session
+
+I did not find an application API directory containing the session-creation endpoint in the current API tree. The documented cookie and authentication code therefore disagree.
+
+This needs runtime verification because the actual login implementation may live elsewhere, but the mismatch itself is confirmed.
+
+🟠 Potential authentication-breaking bug
+7. Cookie takes precedence over Bearer token
+Authentication does:
+token = cookieSession || bearerToken
+
+So if a request contains:
++
+valid Authorization Bearer token
+
+the valid Bearer token is ignored.
+
+That's a correctness problem for API clients and mobile/API consumers.
+
+🟡 Functional/authentication bug
+🔴 P0 — Authorization/RBAC
+8. isAdmin = Boolean(role) is still fundamentally wrong
+This remains one of the deepest authorization flaws.
+isAdmin: Boolean(role)
+
+means every non-null admin role becomes:
+isAdmin = true
+
+So:
+super_admin
+moderator
+finance_user
+support
+marketing
+other future role
+
+can all become "admin" to routes that only check isAdmin.
+
+This violates the separation expected from RBAC. OWASP specifically identifies broken function-level authorization and unclear role hierarchies as a major API risk. OWASP API Security Top 10
+
+🔴 Critical
+9. Admin creation of listings can select moderation status
+The POST route does:
+status: authContext.isAdmin
+  ? (body.status || 'approved')
+  : 'pending'
+
+Because isAdmin is over-broad, any role classified as an "admin" can potentially submit:
+status = approved
+
+during listing creation.
+
+That means moderation authorization is coupled to the overly broad admin flag.
+
+🔴 High/Critical
+10. Generic admin listing update can manually turn on a paid boost
+updateListing() allows admins to set:
+isBoosted
+
+directly.
+
+There is no requirement that:
+paid order
++
+verified payment
++
+completed transaction
+
+exist before the field becomes true.
+
+Worse, it does not necessarily set the corresponding:
+boostStatus
+boostExpiresAt
+boostPaymentId
+boostPackageId
+
+fields.
+
+So an admin update can create:
+isBoosted = true
+boostStatus = inactive
+no payment
+no expiry
+
+🔴 Financial/state-integrity flaw
+🔴 P0 — Listing creation
+11. The service itself still accepts caller-controlled listing status
+The route tries to sanitize it, but the service does:
+status: data.status || 'pending'
+
+The authoritative business rule should live in the service/domain layer, not only in one route.
+
+Otherwise another current/future caller can accidentally create:
+approved
+sold
+rejected
+
+directly.
+
+🔴 Architectural authorization flaw
+12. Seller phone remains caller-controlled
+The route intentionally allows:
+sellerPhone: body.sellerPhone || authContext.user.phone
+
+So an authenticated seller can put another person's phone number into a listing.
+
+This also creates:
+- impersonation risk
+- privacy problems
+- fraudulent contact information
+- moderation difficulty
+🔴 High
+13. Seller name is copied into listing instead of being authoritative
+The listing stores:
+
+
+separately from the user record.
+
+That creates stale identity snapshots.
+
+If a seller changes their name, old listings continue carrying the old value.
+
+🟠 Data integrity
+14. Audit log incorrectly treats ordinary listing creation as an admin action
+createListing() writes:
+action = LISTING_CREATED
+module = Marketplace
+
+The audit system therefore mixes:
+ordinary seller actions
+
+into the same administrative actor model.
+
+This can make the audit trail misleading and can break compliance/reporting.
+
+🟠 Audit integrity
+🔴 P0 — Payment/boost state machine
+15. A non-completed order can still be activated
+This is a new major payment finding.
+
+verifyAndApplyBoost() rejects:
+order.status === completed
+
+but does not require:
+
+
+The transaction repository has the same problem:
+if (order.status === 'completed') ...
+
+then proceeds with activation for any other status. 
+
+So states such as:
+cancelled
+failed
+refunded
+expired
+
+could potentially be transitioned into:
+completed
+
+if the verification path is otherwise satisfied.
+
+🔴 Critical financial state-machine bug
+16. The database transaction also does not require PENDING
+This makes #15 worse.
+
+The repository comments say:
+stored pending order
+
+but the actual code never checks:
+status = pending
+
+before changing it to completed. 
+
+The comment and implementation disagree.
+17. Payment verification does not verify the payment with a payment provider
+The application verifies:
+HMAC(orderId|paymentId)
+
+using an application secret.
+
+That is not provider-side payment verification.
+
+Until a real provider is connected, this should remain disabled/fail-closed.
+
+🔴 Critical before real money
+18. Payment amount is optional
+The code explicitly accepts:
+amount?: number
+
+and only validates it when supplied.
+
+The same applies to currency.
+
+This means the system can ultimately activate a boost without independently establishing that the external provider actually charged the expected amount.
+
+🔴 Critical
+19. Webhook amount/currency are also optional
+The webhook handler does:
+currency ?? payload?.currency
+
+and then accepts missing values.
+
+For a real payment system, amount/currency must come from authoritative provider data.
+20. Webhook does not validate provider-specific event structure
+The route accepts:
+eventType
+orderId
+paymentId
+paymentGateway
+amount
+currency
+
+as generic application JSON.
+
+Real Stripe/Razorpay/etc. webhook payloads have provider-specific semantics and identifiers.
+
+The current system effectively defines its own payment protocol.
+
+🔴 Not production-payment-safe
+21. Payment ID is not database-unique
+boostTransactions.paymentId is not declared unique.
+
+That means the database does not itself guarantee:
+one provider payment ID = one transaction
+
+A real provider integration should normally enforce provider transaction uniqueness.
+
+🔴 High
+22. Payment ID is not bound to a provider transaction
+The current transaction can store:
+paymentId
+
+but there is no provider-side lookup proving:
+
+
+The generic HMAC only proves knowledge of the application's secret.
+23. One listing can accumulate multiple pending boost orders
+The initial check is:
+
+
+If false, order creation proceeds.
+
+Two concurrent requests can both observe:
+
+
+and create separate pending orders.
+
+The later transaction locks the order, not the listing.
+
+🔴 High
+24. Database has no unique active-boost constraint
+There is no database invariant equivalent to:
+
+
+Application checks alone are insufficient against concurrent transactions.
+
+🔴 High
+25. A boost transaction can activate a listing without verifying the listing is still eligible
+Inside activateBoostInTransaction(), the transaction updates the listing directly.
+
+It does not revalidate:
+listing.expiresAt > NOW()
+listing seller = order user
+listing not already boosted
+
+at the moment of activation.
+
+The earlier pre-check is not enough because state can change between the check and transaction.
+
+🔴 High
+26. Package can be disabled after order creation
+The transaction fetches the package again, but doesn't verify:
+
+
+before activation.
+
+Therefore a package disabled after order creation can still be completed.
+
+Whether this is intended depends on your order policy, but it should be an explicit rule.
+
+🟠 Commerce-state issue
+🔴 P0 — Public marketplace query integrity
+27. Expired listings remain approved/public
+This remains confirmed.
+
+The repository filters by status but not:
+
+
+28. Individual listing endpoint also exposes expired approved listings
+The individual endpoint checks:
+
+
+but does not check expiration.
+29. Featured ranking ignores featuredUntil
+The query sorts by:
+
+
+without checking whether featuredUntil has passed. 
+
+🔴 Marketplace-ranking integrity
+30. City search is actually city OR state search
+This is a new functional/SEO bug.
+
+The city filter is:
+listing.city ILIKE %city%
+OR
+listing.state ILIKE %city%
+
+Therefore a Mumbai page can match the entire state of Maharashtra.
+
+For example:
+Mumbai
+
+can match:
+Mumbai
+Pune
+Nagpur
+Nashik
+...
+
+because they all have:
+
+
+as their state.
+
+🔴 Major marketplace filtering bug
+31. Search wildcard abuse remains possible
+Search becomes:
+
+
+for several columns.
+
+% and _ therefore act as LIKE wildcards.
+
+This isn't SQL injection because Drizzle parameterizes the value, but it permits unnecessarily broad queries.
+
+🟠 Resource-consumption issue
+32. Invalid numeric filters become NaN
+The API does:
+
+
+without validating the result.
+
+Therefore:
+
+
+becomes:
+
+
+which can reach the database query.
+
+Same issue exists for:
+- maxPrice
+- limit
+- offset
+🟠 Input-validation bug
+33. Negative limits/offsets aren't rejected
+The API doesn't establish:
+offset >= 0
+limit <= maximum
+
+before querying PostgreSQL.
+
+🟠 DoS/resource-consumption issue
+
+OWASP specifically classifies unrestricted resource consumption as an API security risk. OWASP API Security Top 10
+34. limit=0 disables the limit
+Because repository logic is:
+if (options.limit) query.limit(options.limit)
+
+zero is treated as false.
+
+So:
+
+
+means no LIMIT clause.
+
+🔴 Resource-control bug
+35. Public search can force expensive full-table counting
+Every marketplace query first performs:
+
+
+and then performs the actual query.
+
+Combined with unrestricted search/rate limits, this is a practical database-abuse vector.
+
+🟠/🔴 depending on scale
+🔴 P0 — Public data exposure
+36. Public Listing DTO is still far too privileged
+The mapping includes:
+sellerPhone
+boostPaymentId
+boostPrice
+boostPackageId
+boost analytics
+spamScore
+views
+likes
+chat count
+
+This violates the principle of designing external DTOs separately from persistence objects.
+
+OWASP specifically calls out broken object-property authorization/excessive exposure as API3. OWASP API Security Top 10
+
+🔴 High
+37. KYC schema stores government document numbers in plaintext
+The schema contains:
+fileUrl
+
+in kyc_documents.
+
+There is no evidence in the inspected implementation of:
+- encryption at rest at application level
+- document-number tokenization
+- masked storage
+- privileged document retrieval
+- secure signed URL lifecycle
+I am therefore not claiming the file itself is publicly accessible, but the database model clearly stores highly sensitive KYC data directly.
+
+🔴 High privacy/compliance concern
+38. KYC fileUrl is stored directly
+Again, I have not confirmed that the actual storage bucket is public.
+
+But a plain fileUrl field creates the possibility of permanently exposed KYC documents unless the storage layer is private and access-controlled.
+
+🔴 Must verify before launch
+39. /api/bootstrap returns full system settings publicly
+The route performs:
+
+
+regardless of authentication. 
+
+That is a direct information disclosure.
+40. /api/bootstrap returns all CMS pages
+It uses:
+
+
+rather than explicitly published pages.
+
+Draft/unpublished CMS content can therefore be exposed.
+
+🔴 High
+41. /api/bootstrap returns 120 listings to everyone
+No authentication is required for the bootstrap endpoint.
+
+It loads a substantial listing dataset for every visitor. 
+
+That is both:
+- data exposure
+- unnecessary bandwidth/database consumption.
+42. Admin bootstrap returns the entire user table
+For any user satisfying isAdmin:
+
+
+is executed. 
+
+Because isAdmin is currently Boolean(role), this is tied to the RBAC problem.
+🔴 P0 — Client-side fake database
+43. The application still has a complete second client-side database
+AppContext imports:
+INITIAL_USERS
+INITIAL_LISTINGS
+INITIAL_TRANSACTIONS
+INITIAL_AUDIT_LOGS
+INITIAL_SETTINGS
+INITIAL_CMS_PAGES
+...
+
+This is not just demo data.
+
+The application actively uses these as fallback/current state.
+44. Empty PostgreSQL database silently falls back to demo marketplace data
+This is especially serious:
+initialServerData?.listings?.length > 0
+ ? serverData
+ : seedCategoriesWithTenAds(INITIAL_LISTINGS)
+
+So:
+
+
+does not mean:
+
+
+It means:
+
+
+That directly violates PostgreSQL-as-authoritative-source-of-truth.
+
+🔴 Critical
+45. Database fetch failure can silently activate demo state
+Root layout catches DB errors and leaves:
+
+
+Then AppContext falls back to the initial data.
+
+So a database outage can turn into:
+fake marketplace data appearing as if it were real.
+
+🔴 Critical operational integrity bug
+46. currentAdmin still begins as a hardcoded seeded admin
+AppContext initializes:
+
+
+This means the client still has an independent admin identity.
+47. activeUserId still begins as a seeded user
+Same problem:
+
+
+The browser is therefore capable of having a "current user" that isn't the authenticated server user.
+
+🔴 Critical architecture flaw
+🔴 P0 — SSR security
+48. JSON-LD remains an XSS boundary
+The listing page serializes database-controlled values into:
+
+
+inside <script>.
+
+JSON.stringify() does not by itself make arbitrary data safe for HTML script embedding.
+
+This remains a genuine stored-XSS concern.
+
+🔴 Critical
+49. The same JSON-LD pattern exists on dynamic city/category routes
+The city/category breadcrumb data is also constructed from route/database-controlled values.
+
+All script-embedded JSON needs safe serialization.
+🔴 P1 — URL/SEO integrity
+50. Arbitrary city slug produces a real page instead of 404
+unslugifyCity() is used as a fallback.
+
+So arbitrary paths can generate city pages.
+51. Arbitrary category slug produces a real page
+Same issue with category fallback.
+52. City/category combination isn't validated
+A valid city and valid category can be combined without confirming that the URL represents a valid marketplace hierarchy.
+53. Listing URL isn't cryptographically/semantically bound to listing location/category
+The listing can be fetched by its ID even if the URL path says a different:
+category
+subcategory
+slug
+
+This permits duplicate/wrong canonical URLs.
+54. Numeric suffix ID fallback can resolve the wrong listing
+findById() does:
+↓
+if missing
+numeric suffix lookup
+
+A legacy-looking ID can therefore resolve another listing with a matching suffix.
+
+🔴 Wrong-object resolution
+🔴 P1 — Listing data validation
+55. Negative listing prices aren't rejected
+price is simply:
+
+
+No:
+
+
+validation exists at the route/service boundary.
+56. Infinity/NaN numeric values aren't robustly rejected
+There is no explicit:
+
+
+validation.
+57. Coordinates can be invalid
+No demonstrated validation for:
+longitude ∈ [-180,180]
+
+58. Coordinates equal to zero cannot be updated correctly
+Update logic uses:
+if (updatedData.location.latitude)
+
+and equivalent logic for longitude.
+
+Therefore:
+longitude = 0
+
+is treated as "not supplied."
+
+That's a genuine functional bug.
+59. Category ID existence isn't explicitly validated before listing creation
+PostgreSQL FK catches nonexistent category IDs, but there is no domain validation for:
+correct hierarchy?
+posting allowed?
+paid category?
+
+60. Subcategory isn't constrained by FK
+The schema has:
+
+
+but no foreign key tying it to categories.id.
+
+More importantly, there is no database/domain constraint ensuring:
+
+
+🔴 Taxonomy-integrity problem
+61. Location hierarchy isn't enforced
+Listings store:
+city
+locality
+
+as free strings.
+
+There is no relational guarantee that:
+city belongs to state
+
+🟠/🔴 data integrity
+🔴 P1 — Bulk operation vulnerabilities
+62. Arbitrary listing deletion remains
+The bulk endpoint accepts IDs and only requires authentication.
+
+The repository executes:
+
+
+with no ownership restriction. 
+
+🔴 Critical
+63. Arbitrary listing renewal remains
+Same problem.
+
+🔴 Critical
+64. Bulk status changes are also dangerous if reachable by an insufficiently privileged caller
+The repository itself has:
+
+
+with no ownership authorization.
+
+The service exposes:
+bulkReject
+
+Therefore authorization must be enforced before these methods.
+
+🔴 High
+65. Bulk delete has no maximum ID count
+A caller can potentially submit an arbitrarily large ID array.
+
+🟠 Resource exhaustion
+66. Bulk renewal ignores requested days
+Still confirmed.
+
+The service receives days, but repository always renews for 30 days.
+🔴 P1 — Boost API implementation bugs
+67. Boost package POST forgets await
+The route does:
+const pkg = boostService.createPackage(body);
+return NextResponse.json(pkg)
+
+So pkg is a Promise, not the created package.
+
+This can produce an incorrect response even though the database operation eventually runs.
+
+🔴 Functional API bug
+68. Boost analytics GET forgets await
+The same pattern exists in analytics.
+
+The endpoint can serialize a Promise rather than analytics data.
+
+🔴 Functional API bug
+69. Boost package creation has no authentication
+Anyone can call it.
+
+🔴 Critical
+70. Boost package creation has no validation
+The service accepts arbitrary:
+discountPrice
+duration
+features
+currency
+
+without strong schema validation.
+
+🔴 High
+🔴 P1 — Cron/cleanup
+71. Cleanup authorization uses the same over-broad isAdmin
+So the RBAC problem applies to boost cleanup.
+72. Cron secret uses ordinary equality
+cronSecret === process.env.CRON_SECRET
+
+A timing-safe comparison is preferable for a secret.
+
+This is not the biggest issue here, but it is a genuine hardening point.
+73. The documented cron endpoint does not match the repository's route
+.env.example describes:
+
+
+but the inspected application API tree contains:
+
+
+That indicates configuration/documentation drift and potentially a deployment scheduler calling a nonexistent endpoint.
+
+🟠 Operational bug
+🔴 P1 — Admin/API exposure
+74. Admin metrics GET remains unauthenticated
+Confirmed.
+75. Admin settings GET remains unauthenticated
+Confirmed.
+76. Boost analytics GET remains unauthenticated
+Confirmed.
+77. Admin page has no server-side authorization gate
+/admin renders the client application without first requiring an authorized session.
+
+That means the entire admin frontend is publicly renderable.
+
+🔴 High
+🟠 P2 — Root-layout architecture
+78. Every route loads up to 500 marketplace listings
+Root layout:
+findMarketplaceListings({status:'approved', limit:500})
+
+This includes routes that don't need listings.
+79. Root layout loads all system settings into the client provider
+Same layout loads:
+settings
+
+and passes them into a client component.
+
+This is a direct public data boundary problem.
+80. Root layout loads all CMS pages into client state
+Again:
+cmsRepository.findAllPages()
+
+No published-only filter.
+81. Root layout's DB failure behavior is unsafe
+The catch:
+console.error()
+
+then continues rendering.
+
+Combined with AppContext fallback behavior, this causes the fake-data problem described above.
+🟠 P2 — Database correctness
+82. Partial unique title index and application duplicate check can diverge on errors
+The duplicate check catches database errors and returns:
+isDuplicate = false
+
+That's a fail-open validation behavior.
+
+The database constraint should remain the final authority and constraint violations should be handled explicitly.
+83. Database update repository accepts arbitrary fields
+listingRepository.update() does:
+.set({
+  ...fields
+})
+
+The service currently uses allowlists, which is good, but the repository itself is extremely powerful.
+
+Any future caller that passes request data directly into it can create a mass-assignment vulnerability.
+84. User repository update has the same pattern
+userRepository.update() accepts:
+
+
+and spreads all fields directly into the update.
+
+This is a latent mass-assignment vulnerability if any HTTP layer passes arbitrary JSON through.
+
+OWASP explicitly categorizes this under broken object-property authorization. OWASP API Security Top 10
+🟠 P2 — Audit integrity
+85. IP addresses are accepted from proxy headers without a demonstrated trusted-proxy boundary
+getRequestIp() takes the first x-forwarded-for value.
+
+If the infrastructure does not overwrite/sanitize that header, users can spoof their audit IP.
+86. Audit logging is incomplete across the application
+Some server mutations generate PostgreSQL audit records, while many client-side admin operations only change React state.
+
+So the audit log cannot be assumed to represent the complete history.
+🟠 P2 — Admin persistence
+87. CMS operations are still local-state driven
+The context's CMS functions mutate:
+
+
+instead of reliably persisting to PostgreSQL.
+88. User operations are still local-state driven
+The context has:
+verifyUserKyc
+banUser
+unbanUser
+
+and maintains local users.
+89. Category/custom-field/location operations have the same duplicate-state problem
+The context maintains separate local collections for all of them.
+90. Settings have a local copy
+The client keeps:
+
+
+in React state, which can diverge from PostgreSQL.
+🟠 P2 — Fake communication/compliance
+91. Listing chat is simulated
+The detail page automatically creates seller messages.
+
+No authoritative chat_messages write occurs.
+92. Seller activity indicators are not authoritative
+Online/responder/trust indicators are hardcoded rather than derived from real activity.
+93. KYC verification displayed to marketplace users isn't reliably tied to current DB KYC state
+This can cause a false "verified" trust signal.
+94. Email "delivery" is simulated
+The application can maintain email logs without an actual email provider delivery path.
+95. Newsletter metrics are not necessarily real delivery metrics
+Same issue for newsletter state.
+🟠 P2 — View/engagement integrity
+96. Listing views aren't reliably tied to actual page views
+The database has an increment operation, but the detail-page workflow doesn't reliably invoke it.
+97. Likes/chats counters can become presentation-only values
+The schema contains counters, but the inspected architecture does not establish that every user interaction atomically updates the authoritative counter.
+
+This needs end-to-end verification.
+🟠 P2 — SEO
+98. Sitemap is incomplete
+Only 200 listings are included.
+99. Sitemap hierarchy does not consistently correspond to actual routing
+Some generated URLs don't match the implemented city/category/subcategory structure.
+100. Search URL indexing policy is not clearly enforced
+Arbitrary query URLs can create crawl-space unless explicit noindex/canonical policy is applied.
+🟠 P2 — Dependency/tooling problems
+101. eslint errors are explicitly ignored during builds
+next.config.ts contains:
+eslint: {
+  ignoreDuringBuilds: true
+}
+
+So a successful production build does not establish that lint/security rules pass.
+
+This is particularly problematic for a security-sensitive application.
+102. Next.js and eslint-config-next major versions are mismatched
+The project declares:
+next = ^15.4.9
+eslint-config-next = 16.0.8
+
+That is a suspicious toolchain mismatch and should be corrected alongside the Next.js security upgrade.
+🟡 P3 — Additional correctness issues
+103. sellerType is always "user"
+The repository hardcodes:
+sellerType: 'user'
+
+Business sellers therefore aren't represented correctly.
+104. Seller avatar is always empty
+The repository maps:
+sellerAvatar: ''
+
+instead of resolving the actual user avatar.
+105. lastLogin isn't actually last-login data
+mapRowToUser() maps:
+lastLogin = updatedAt
+
+So an account update changes the apparent "last login."
+106. lastIp is always "unknown"
+Again:
+
+
+So the admin UI can show misleading account-security information.
+107. User statistics are hardcoded to zero
+The repository maps:
+activeListings: 0
+
+That makes admin/user analytics inaccurate.
+🟡 P3 — Data lifecycle
+108. Listing deletion is a hard delete
+The repository does:
+
+
+That can destroy:
+- audit context
+- historical listing identity
+- abuse-report references
+- analytical history
+- moderation history
+depending on the surrounding FK configuration.
+
+For a marketplace, whether deletion should be hard or soft needs to be explicit.
+109. Listing deletion cascades dependent records
+The schema shows favorites/chat/boost relationships with cascading deletes in multiple places. 
+
+Hard deletion can therefore destroy evidence/history along with the listing.
+
+This is particularly problematic for abuse reports, fraud investigations, and payment records.
+🟡 P3 — Payment historical integrity
+110. Listing deletion can cascade boost orders
+boostOrders.listingId references listings with ON DELETE CASCADE.
+
+That means deleting a listing can delete the associated boost order history.
+
+For financial records, this is dangerous.
+
+This should be reviewed very carefully.
+🟡 P3 — Payment audit mismatch
+111. Payment audit log uses adminId=userId
+The boost activation path writes:
+adminId: userId
+
+even though the actor is a normal buyer/seller. 
+
+Again, audit semantics are incorrect.
+🟡 P3 — Tax/business logic
+112. GST is hardcoded to 18%
+Boost order creation calculates:
+price * 0.18
+
+There is no authoritative tax configuration or tax jurisdiction logic.
+
+If the marketplace is India-only and 18% is explicitly intended, this is a business rule rather than a vulnerability. But it should be centralized rather than hidden inside the service.
+🟡 P3 — Currency consistency
+113. Currency is stored in multiple places
+There is:
+boostPackages.currency
+boostOrders.currency
+boostTransactions
+
+and the service also has assumptions around INR.
+
+The system needs one authoritative currency policy.

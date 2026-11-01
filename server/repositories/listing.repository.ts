@@ -154,12 +154,16 @@ export class ListingRepository {
     try {
       const conditions: any[] = [];
 
-      // Status filtering
+      // Status & Expiration filtering: Public marketplace shows ONLY non-expired approved listings
       if (options.status && options.status !== 'all') {
         conditions.push(eq(schema.listings.status, options.status));
+        if (options.status === 'approved') {
+          conditions.push(gte(schema.listings.expiresAt, new Date()));
+        }
       } else if (!options.status) {
-        // Public marketplace default: only approved listings
+        // Public marketplace default: only approved AND non-expired listings
         conditions.push(eq(schema.listings.status, 'approved'));
+        conditions.push(gte(schema.listings.expiresAt, new Date()));
       }
 
       // Seller filter
@@ -167,15 +171,10 @@ export class ListingRepository {
         conditions.push(eq(schema.listings.sellerId, options.sellerId));
       }
 
-      // City filter
+      // City filter (Strict city matching, excluding state to prevent Mumbai from matching entire Maharashtra)
       if (options.city && options.city !== 'All India' && options.city !== 'all-india' && options.city !== 'all') {
-        const cleanCity = options.city.replace(/[-_]/g, ' ');
-        conditions.push(
-          or(
-            ilike(schema.listings.city, `%${cleanCity}%`),
-            ilike(schema.listings.state, `%${cleanCity}%`)
-          )
-        );
+        const cleanCity = options.city.replace(/[-_]/g, ' ').trim();
+        conditions.push(ilike(schema.listings.city, `%${cleanCity}%`));
       }
 
       // Category filter
@@ -193,9 +192,10 @@ export class ListingRepository {
         conditions.push(eq(schema.listings.subcategoryId, options.subcategory));
       }
 
-      // Search query
+      // Search query (Sanitize % and _ wildcards to prevent query abuse)
       if (options.search && options.search.trim()) {
-        const q = `%${options.search.trim()}%`;
+        const sanitizedTerm = options.search.trim().replace(/[%_\\]/g, '\\$&');
+        const q = `%${sanitizedTerm}%`;
         conditions.push(
           or(
             ilike(schema.listings.title, q),
@@ -206,11 +206,11 @@ export class ListingRepository {
         );
       }
 
-      // Price bounds
-      if (options.minPrice !== undefined) {
+      // Price bounds (Validate non-NaN positive numbers)
+      if (options.minPrice !== undefined && !isNaN(Number(options.minPrice)) && isFinite(Number(options.minPrice)) && Number(options.minPrice) >= 0) {
         conditions.push(gte(schema.listings.price, String(options.minPrice)));
       }
-      if (options.maxPrice !== undefined) {
+      if (options.maxPrice !== undefined && !isNaN(Number(options.maxPrice)) && isFinite(Number(options.maxPrice)) && Number(options.maxPrice) >= 0) {
         conditions.push(lte(schema.listings.price, String(options.maxPrice)));
       }
 
@@ -241,15 +241,21 @@ export class ListingRepository {
         .where(whereClause)
         .orderBy(
           sql`CASE WHEN ${schema.listings.boostStatus} = 'active' AND ${schema.listings.boostExpiresAt} > NOW() THEN 1 ELSE 0 END DESC`,
-          desc(schema.listings.isFeatured),
+          sql`CASE WHEN ${schema.listings.isFeatured} = true AND (${schema.listings.featuredUntil} IS NULL OR ${schema.listings.featuredUntil} > NOW()) THEN 1 ELSE 0 END DESC`,
           desc(schema.listings.createdAt)
         );
 
-      if (options.limit) {
-        query.limit(options.limit);
-      }
-      if (options.offset) {
-        query.offset(options.offset);
+      // Numeric bounds: Limit capped at [1, 100], Offset >= 0
+      const limitVal = options.limit !== undefined && !isNaN(Number(options.limit))
+        ? Math.min(Math.max(Number(options.limit) || 20, 1), 100)
+        : 20;
+      const offsetVal = options.offset !== undefined && !isNaN(Number(options.offset))
+        ? Math.max(Number(options.offset) || 0, 0)
+        : 0;
+
+      query.limit(limitVal);
+      if (offsetVal > 0) {
+        query.offset(offsetVal);
       }
 
       const rows = await query;
@@ -391,9 +397,10 @@ export class ListingRepository {
     }
   }
 
-  public async bulkRenew(ids: string[]): Promise<{ renewedCount: number }> {
+  public async bulkRenew(ids: string[], days = 30): Promise<{ renewedCount: number }> {
     try {
-      const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const validDays = !isNaN(Number(days)) && Number(days) > 0 ? Number(days) : 30;
+      const newExpiry = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000);
       const res = await db
         .update(schema.listings)
         .set({

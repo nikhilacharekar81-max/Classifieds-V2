@@ -195,6 +195,11 @@ export class UserRepository {
         await this.deleteSession(sessionId);
         return null;
       }
+      // Security Gate: Inactive or banned users cannot authenticate
+      if (user.status !== 'active') {
+        await this.deleteSession(sessionId);
+        return null;
+      }
       return { session, user: this.mapRowToUser(user), adminRole: user.adminRole };
     } catch (error) {
       console.error('UserRepository.findSession error:', error);
@@ -207,6 +212,14 @@ export class UserRepository {
       await db.delete(schema.userSessions).where(eq(schema.userSessions.id, sessionId));
     } catch (error) {
       console.error('UserRepository.deleteSession error:', error);
+    }
+  }
+
+  public async deleteUserSessions(userId: string) {
+    try {
+      await db.delete(schema.userSessions).where(eq(schema.userSessions.userId, userId));
+    } catch (error) {
+      console.error('UserRepository.deleteUserSessions error:', error);
     }
   }
 }

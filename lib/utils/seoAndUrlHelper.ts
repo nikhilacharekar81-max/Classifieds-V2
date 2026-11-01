@@ -872,5 +872,35 @@ export function updateSeoAndCanonical(
     scriptEl.type = 'application/ld+json';
     document.head.appendChild(scriptEl);
   }
-  scriptEl.textContent = JSON.stringify(schemaData, null, 2);
+  scriptEl.textContent = serializeJsonLd(schemaData);
+}
+
+/**
+ * Safely serializes data for embedding inside HTML <script type="application/ld+json">
+ * to prevent stored XSS vulnerabilities.
+ */
+export function serializeJsonLd(data: unknown): string {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/**
+ * Strips internal moderation, seller phone, and financial/analytics fields for public API responses
+ */
+export function toPublicListingDTO(listing: Listing): Partial<Listing> {
+  const {
+    spamScore,
+    boostPaymentId,
+    rejectionReason,
+    sellerPhone,
+    boostViews,
+    boostImpressions,
+    boostClicks,
+    ...publicDTO
+  } = listing;
+  return publicDTO;
 }

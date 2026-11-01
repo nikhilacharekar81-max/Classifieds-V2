@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { locationRepository } from '@/server/repositories/location.repository';
 import { categoryRepository } from '@/server/repositories/category.repository';
 import { listingRepository } from '@/server/repositories/listing.repository';
 import { AppClientRouter } from '@/components/AppClientRouter';
-import { stripChillySuffixes, unslugifyCity } from '@/lib/utils/seoAndUrlHelper';
+import { stripChillySuffixes, unslugifyCity, serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 
 interface CategoryCityPageProps {
   params: Promise<{ city: string; category: string }>;
@@ -61,6 +62,12 @@ export default async function CategoryCityPage({ params, searchParams }: Categor
     categoryRepository.findBySlug(cleanCatSlug).then((r) => r || categoryRepository.findBySlug(category)),
   ]);
 
+  const isSpecialCity = cleanCitySlug === 'all-india' || cleanCitySlug === 'india' || cleanCitySlug === 'all';
+  const isSpecialCategory = cleanCatSlug === 'all';
+  if ((!loc && !isSpecialCity) || (!cat && !isSpecialCategory)) {
+    notFound();
+  }
+
   const cityName = loc ? loc.name : unslugifyCity(city, locations).cityName;
   const categoryName = cat ? cat.name : cleanCatSlug.charAt(0).toUpperCase() + cleanCatSlug.slice(1);
 
@@ -93,7 +100,7 @@ export default async function CategoryCityPage({ params, searchParams }: Categor
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
       />
       <AppClientRouter
         initialPath={`/${city}/${category}`}
@@ -107,3 +114,4 @@ export default async function CategoryCityPage({ params, searchParams }: Categor
     </>
   );
 }
+

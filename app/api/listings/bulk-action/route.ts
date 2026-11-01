@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listingService } from '@/server/services/listing.service';
+import { listingRepository } from '@/server/repositories/listing.repository';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 
 export async function POST(req: NextRequest) {
@@ -17,9 +18,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Admin permissions required for approve/reject
-    if ((action === 'approve' || action === 'reject') && !authContext.isModerator && !authContext.isAdmin) {
+    if (ids.length > 100) {
+      return NextResponse.json(
+        { error: 'Bulk operations are capped at a maximum of 100 items per request' },
+        { status: 400 }
+      );
+    }
+
+    const isPrivileged = Boolean(authContext.isModerator || authContext.isSuperAdmin);
+
+    // Admin/Moderator permissions required for approve/reject
+    if ((action === 'approve' || action === 'reject') && !isPrivileged) {
       return NextResponse.json({ error: 'Forbidden: Moderator permission required' }, { status: 403 });
+    }
+
+    // Ownership verification for non-privileged user bulk operations
+    if (!isPrivileged) {
+      for (const id of ids) {
+        const item = await listingRepository.findById(id);
+        if (!item || item.sellerId !== authContext.userId) {
+          return NextResponse.json(
+            { error: `Unauthorized: You do not own listing ${id}` },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     if (action === 'approve') {
@@ -40,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     // Support both 'renew' and 'update' (from frontend callers)
     if (action === 'renew' || (action === 'update' && (data?.renew || data?.status === 'approved' || data?.action === 'renew'))) {
-      const days = data?.days || 30;
+      const days = typeof data?.days === 'number' && data.days > 0 ? data.days : 30;
       const count = await listingService.bulkRenew(ids, days);
       return NextResponse.json({ success: true, count });
     }

@@ -259,12 +259,19 @@ export class BoostService {
       return { success: false, error: 'Unauthorized: User does not match order', status: 403 };
     }
 
-    // 5. Reject already-processed orders
-    if (order.status === 'completed') {
+    // 5. Reject non-pending orders (must be 'pending')
+    if (order.status !== 'pending') {
+      if (order.status === 'completed') {
+        return {
+          success: false,
+          error: 'Boost order has already been processed',
+          status: 409,
+        };
+      }
       return {
         success: false,
-        error: 'Boost order has already been processed',
-        status: 409,
+        error: `Boost order status is '${order.status}' and cannot be activated`,
+        status: 400,
       };
     }
 

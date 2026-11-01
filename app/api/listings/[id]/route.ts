@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listingService } from '@/server/services/listing.service';
 import { getAuthenticatedUser } from '@/lib/auth/session';
+import { toPublicListingDTO } from '@/lib/utils/seoAndUrlHelper';
 
 export async function GET(
   req: NextRequest,
@@ -12,15 +13,22 @@ export async function GET(
     return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
   }
 
-  // If listing is not approved, only the owner or an admin can view it
-  if (listing.status !== 'approved') {
-    const authContext = await getAuthenticatedUser(req);
-    const isOwner = authContext?.userId === listing.sellerId;
-    const isAdmin = Boolean(authContext?.isAdmin);
+  const authContext = await getAuthenticatedUser(req);
+  const isOwner = Boolean(authContext?.userId && authContext.userId === listing.sellerId);
+  const isPrivileged = Boolean(authContext?.isModerator || authContext?.isSuperAdmin);
 
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'Listing not found or pending review' }, { status: 404 });
+  // Expiration Check: If listing is expired, only owner or admin can view it
+  const isExpired = listing.expiresAt && new Date(listing.expiresAt) <= new Date();
+
+  if (listing.status !== 'approved' || isExpired) {
+    if (!isOwner && !isPrivileged) {
+      return NextResponse.json({ error: 'Listing not found or expired' }, { status: 404 });
     }
+  }
+
+  // Strip internal fields for public responses unless caller is owner or privileged admin
+  if (!isOwner && !isPrivileged) {
+    return NextResponse.json(toPublicListingDTO(listing));
   }
 
   return NextResponse.json(listing);

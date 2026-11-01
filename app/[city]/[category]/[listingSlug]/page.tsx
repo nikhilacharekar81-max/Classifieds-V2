@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { listingRepository } from '@/server/repositories/listing.repository';
 import { categoryRepository } from '@/server/repositories/category.repository';
 import { locationRepository } from '@/server/repositories/location.repository';
-import { stripChillySuffixes, unslugifyCity, unslugifyCategory } from '@/lib/utils/seoAndUrlHelper';
+import { stripChillySuffixes, unslugifyCity, unslugifyCategory, serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 import { AppClientRouter } from '@/components/AppClientRouter';
 import { notFound } from 'next/navigation';
 
@@ -131,7 +131,7 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
       <>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
         <AppClientRouter
           initialPath={`/${city}/${category}/${listingSlug}`}
@@ -196,7 +196,7 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
       />
       <AppClientRouter
         initialPath={`/${city}/${category}/${listingSlug}`}
@@ -210,3 +210,4 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
     </>
   );
 }
+

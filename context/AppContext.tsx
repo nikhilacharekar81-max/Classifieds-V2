@@ -244,9 +244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
 
   // Collections (initialized from server-fetched PostgreSQL data during SSR when provided)
   const [listings, setListings] = useState<Listing[]>(() =>
-    initialServerData?.listings && initialServerData.listings.length > 0
-      ? initialServerData.listings
-      : seedCategoriesWithTenAds(INITIAL_LISTINGS)
+    initialServerData?.listings || []
   );
   const [categories, setCategories] = useState<Category[]>(() =>
     initialServerData?.categories && initialServerData.categories.length > 0
@@ -442,23 +440,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     }
   }, [theme]);
 
-  // Load listings from server once on mount to keep in sync with backend
+  // Synchronize state with PostgreSQL backend on mount via /api/bootstrap
   useEffect(() => {
-    const syncListingsWithServer = async () => {
+    const syncDataWithServer = async () => {
       try {
-        const res = await fetch('/api/listings');
+        const res = await fetch('/api/bootstrap');
         if (res.ok) {
           const data = await res.json();
-          const items = Array.isArray(data) ? data : data?.items;
-          if (Array.isArray(items) && items.length > 0) {
-            setListings(items);
+          if (Array.isArray(data.listings)) {
+            setListings(data.listings);
+          }
+          if (Array.isArray(data.categories) && data.categories.length > 0) {
+            setCategories(data.categories);
+          }
+          if (Array.isArray(data.locations) && data.locations.length > 0) {
+            setLocations(data.locations);
+          }
+          if (Array.isArray(data.cmsPages)) {
+            setCmsPages(data.cmsPages);
+          }
+          if (data.settings) {
+            setSettings((prev) => ({ ...prev, ...data.settings }));
+          }
+          if (data.currentUser) {
+            setActiveUserId(data.currentUser.id);
           }
         }
       } catch (err) {
-        console.error('Failed to sync listings with backend:', err);
+        console.error('Failed to sync bootstrap data with backend:', err);
       }
     };
-    syncListingsWithServer();
+    syncDataWithServer();
   }, []);
 
   // Toast manager
