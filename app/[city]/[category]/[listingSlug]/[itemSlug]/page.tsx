@@ -73,6 +73,13 @@ export default async function FourSegmentListingPage({ params }: FourSegmentList
     notFound();
   }
 
+  const relatedResult = await listingRepository.findMarketplaceListings({
+    status: 'approved',
+    category: listing.categoryId,
+    limit: 5,
+    offset: 0,
+  });
+
   const jsonLd = {
     '@context': 'https://schema.org/',
     '@type': 'Product',
@@ -101,6 +108,7 @@ export default async function FourSegmentListingPage({ params }: FourSegmentList
       <AppClientRouter
         initialPath={`/${city}/${category}/${listingSlug}/${itemSlug}`}
         initialListing={listing}
+        initialListings={relatedResult.items}
       />
     </>
   );

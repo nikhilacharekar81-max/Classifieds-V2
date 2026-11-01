@@ -1,10 +1,10 @@
 import { db } from '@/src/db/index';
 import * as schema from '@/src/db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, and, gte, sql } from 'drizzle-orm';
 import { Category, CustomFieldDefinition } from '@/lib/types';
 
 export class CategoryRepository {
-  private mapRowToCategory(row: typeof schema.categories.$inferSelect): Category {
+  private mapRowToCategory(row: typeof schema.categories.$inferSelect, listingCount = 0): Category {
     return {
       id: row.id,
       name: row.name,
@@ -13,7 +13,7 @@ export class CategoryRepository {
       parentId: row.parentId,
       order: row.orderIndex,
       isActive: row.isActive,
-      listingCount: 0,
+      listingCount,
       seoTitle: row.seoTitle || undefined,
       seoDescription: row.seoDescription || undefined,
       isPaid: row.isPaid,
@@ -24,8 +24,53 @@ export class CategoryRepository {
 
   public async findAll(): Promise<Category[]> {
     try {
-      const rows = await db.select().from(schema.categories).orderBy(asc(schema.categories.orderIndex));
-      return rows.map((r) => this.mapRowToCategory(r));
+      const now = new Date();
+      const [rows, catCounts, subCounts] = await Promise.all([
+        db.select().from(schema.categories).orderBy(asc(schema.categories.orderIndex)),
+        db
+          .select({
+            categoryId: schema.listings.categoryId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(schema.listings)
+          .where(and(eq(schema.listings.status, 'approved'), gte(schema.listings.expiresAt, now)))
+          .groupBy(schema.listings.categoryId),
+        db
+          .select({
+            subcategoryId: schema.listings.subcategoryId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(schema.listings)
+          .where(
+            and(
+              eq(schema.listings.status, 'approved'),
+              gte(schema.listings.expiresAt, now),
+              sql`${schema.listings.subcategoryId} IS NOT NULL`
+            )
+          )
+          .groupBy(schema.listings.subcategoryId),
+      ]);
+
+      const parentCountMap: Record<string, number> = {};
+      for (const c of catCounts) {
+        if (c.categoryId) {
+          parentCountMap[c.categoryId] = Number(c.count) || 0;
+        }
+      }
+
+      const subCountMap: Record<string, number> = {};
+      for (const s of subCounts) {
+        if (s.subcategoryId) {
+          subCountMap[s.subcategoryId] = Number(s.count) || 0;
+        }
+      }
+
+      return rows.map((r) => {
+        const count = r.parentId
+          ? (subCountMap[r.id] || 0)
+          : (parentCountMap[r.id] || 0);
+        return this.mapRowToCategory(r, count);
+      });
     } catch (error) {
       console.error('CategoryRepository.findAll error:', error);
       throw new Error('Failed to find categories', { cause: error });

@@ -49,6 +49,14 @@ export function navigateTo(targetUrl: string) {
     cleanUrl = '/' + cleanUrl;
   }
 
+  // Perform full browser HTTP request for normal page navigation (PHP-style multi-page behavior)
+  const isAdminInternal =
+    window.location.pathname.startsWith('/admin') && cleanUrl.startsWith('/admin');
+  if (!isAdminInternal) {
+    window.location.href = cleanUrl;
+    return;
+  }
+
   const currentFull = window.location.pathname + window.location.search;
   if (currentFull !== cleanUrl) {
     window.history.pushState({}, '', cleanUrl);

@@ -37,9 +37,14 @@ import { renderUnclickableDescription } from '@/lib/utils/unclickableLinks';
 interface ListingDetailPageProps {
   listingId: string;
   initialListing?: Listing | null;
+  initialListings?: Listing[];
 }
 
-export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId, initialListing }) => {
+export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({
+  listingId,
+  initialListing,
+  initialListings,
+}) => {
   const {
     listings,
     categories,
@@ -53,7 +58,8 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
     theme,
     currentUser,
   } = useApp();
-  const listing = findListingById(listings, listingId) || initialListing || null;
+  const sourceListings = initialListings && initialListings.length > 0 ? initialListings : listings;
+  const listing = findListingById(sourceListings, listingId) || findListingById(listings, listingId) || initialListing || null;
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showPhone, setShowPhone] = useState(false);
@@ -86,10 +92,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
         </p>
         <a
           href="/"
-          onClick={(e) => {
-            e.preventDefault();
-            navigateTo('/');
-          }}
           className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow transition-all flex items-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" /> Return to Classifieds Home
@@ -100,7 +102,7 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
 
   const category = categories.find((c) => c.id === listing.categoryId);
   const subcategory = listing.subcategoryId ? categories.find((c) => c.id === listing.subcategoryId) : null;
-  const relatedListings = listings
+  const relatedListings = sourceListings
     .filter((l) => l.id !== listing.id && l.status === 'approved' && (l.categoryId === listing.categoryId || l.subcategoryId === listing.subcategoryId || l.location.city === listing.location.city))
     .slice(0, 4);
 
@@ -211,13 +213,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
           <div className="flex items-center gap-6">
             <a
               href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                setSelectedMarketplaceCategory('all');
-                setSelectedMarketplaceSubcategory('all');
-                setMarketplaceSearch('');
-                navigateTo('/');
-              }}
               className="w-12 h-10 rounded-xl bg-slate-950 text-white flex items-center justify-center font-black text-2xl tracking-tighter cursor-pointer hover:bg-slate-800 transition-colors"
             >
               chillyads
@@ -255,10 +250,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
           <div className="flex items-center gap-2 sm:gap-3">
             <a
               href="/my-account"
-              onClick={(e) => {
-                e.preventDefault();
-                navigateTo('/my-account');
-              }}
               className="px-3 py-2 text-slate-800 dark:text-slate-200 hover:text-blue-600 font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
               title="User Account & Ads Panel"
             >
@@ -268,10 +259,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
 
             <a
               href="/post"
-              onClick={(e) => {
-                e.preventDefault();
-                navigateTo('/post');
-              }}
               className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 border-2 border-slate-950 transition-all uppercase tracking-wider cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" /> + SELL
@@ -298,10 +285,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
           <div className="flex items-center gap-2">
             <a
               href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                navigateTo('/');
-              }}
               className="hover:text-blue-600 font-medium flex items-center gap-1 shrink-0"
             >
               Home
@@ -311,11 +294,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
                 <span className="text-slate-300">/</span>
                 <a
                   href={cityUrl}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setSelectedMarketplaceCity(listing.location.city);
-                    navigateTo(cityUrl);
-                  }}
                   className="hover:text-blue-600 font-medium transition-colors cursor-pointer shrink-0"
                 >
                   {listing.location.city}
@@ -327,7 +305,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
               <>
                 <a
                   href={categoryUrl}
-                  onClick={handleCategoryClick}
                   className="hover:text-blue-600 font-medium transition-colors cursor-pointer shrink-0"
                 >
                   {category.name}
@@ -339,7 +316,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
               <>
                 <a
                   href={subcategoryUrl}
-                  onClick={handleSubcategoryClick}
                   className="hover:text-blue-600 font-medium transition-colors cursor-pointer shrink-0"
                 >
                   {subcategory.name}
@@ -725,10 +701,6 @@ export const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listingId,
                   <a
                     key={item.id}
                     href={itemUrl}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigateTo(itemUrl);
-                    }}
                     className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md cursor-pointer transition-all group block"
                   >
                     <div className="relative h-40 bg-slate-900 overflow-hidden">

@@ -58,6 +58,13 @@ export default async function ItemDetailPage({
     notFound();
   }
 
+  const relatedResult = await listingRepository.findMarketplaceListings({
+    status: 'approved',
+    category: listing.categoryId,
+    limit: 5,
+    offset: 0,
+  });
+
   const jsonLd = {
     '@context': 'https://schema.org/',
     '@type': 'Product',
@@ -86,6 +93,7 @@ export default async function ItemDetailPage({
       <AppClientRouter
         initialPath={`/item/${id}`}
         initialListing={listing}
+        initialListings={relatedResult.items}
       />
     </>
   );

@@ -185,6 +185,9 @@ export interface AppClientRouterProps {
   initialPath?: string;
   initialQuery?: Record<string, string>;
   initialListing?: Listing | null;
+  initialListings?: Listing[];
+  initialTotalListings?: number;
+  initialPage?: number;
   initialServerData?: InitialServerData;
 }
 
@@ -192,6 +195,9 @@ function AppClientRouterInner({
   initialPath,
   initialQuery,
   initialListing,
+  initialListings,
+  initialTotalListings,
+  initialPage,
 }: AppClientRouterProps) {
   const {
     activeSidebarTab,
@@ -239,7 +245,7 @@ function AppClientRouterInner({
 
     // 4. Find active listing if on item page
     const activeListing = parsedRoute.listingId
-      ? findListingById(listings, parsedRoute.listingId) || initialListing || null
+      ? findListingById(initialListings || listings, parsedRoute.listingId) || initialListing || null
       : null;
 
     // 5. Update Document SEO & Canonical Link Tag
@@ -252,6 +258,7 @@ function AppClientRouterInner({
     parsedRoute,
     query.q,
     listings,
+    initialListings,
     initialListing,
     categories,
     settings,
@@ -301,7 +308,11 @@ function AppClientRouterInner({
   if (parsedRoute.routeType === 'listing' && parsedRoute.listingId) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
-        <ListingDetailPage listingId={parsedRoute.listingId} initialListing={initialListing} />
+        <ListingDetailPage
+          listingId={parsedRoute.listingId}
+          initialListing={initialListing}
+          initialListings={initialListings}
+        />
         {renderGlobalOverlays()}
       </div>
     );
@@ -348,7 +359,13 @@ function AppClientRouterInner({
   // Default Route: Public Marketplace / Home / City / Category / Search
   return (
     <div className={theme === 'dark' ? 'dark' : ''}>
-      <MarketplaceView initialRoute={parsedRoute} initialQuery={query} />
+      <MarketplaceView
+        initialRoute={parsedRoute}
+        initialQuery={query}
+        initialListings={initialListings}
+        initialTotalListings={initialTotalListings}
+        initialPage={initialPage}
+      />
       {renderGlobalOverlays()}
     </div>
   );
