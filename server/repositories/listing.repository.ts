@@ -1,6 +1,6 @@
 import { db } from '@/src/db/index';
 import * as schema from '@/src/db/schema';
-import { eq, and, notInArray, sql, desc, asc, or, ilike, gte, lte, inArray } from 'drizzle-orm';
+import { eq, and, notInArray, sql, desc, or, ilike, gte, lte, inArray } from 'drizzle-orm';
 import { Listing } from '@/lib/types';
 import { normalizeAdTitle, DUPLICATE_TITLE_ERROR_MESSAGE } from '@/lib/utils/adTitleValidation';
 
@@ -15,17 +15,7 @@ export interface ListingFilterQuery {
   sellerId?: string;
   propertyType?: string;
   configuration?: string;
-  propertyStatus?: string;
-  listedBy?: string;
   furnishing?: string;
-  minArea?: number;
-  maxArea?: number;
-  maxDeposit?: number;
-  brokerage?: string;
-  tenantPreference?: string;
-  availableFrom?: string;
-  petsAllowed?: string;
-  sort?: string;
   limit?: number;
   offset?: number;
 }
@@ -188,25 +178,19 @@ export class ListingRepository {
         conditions.push(ilike(schema.listings.city, `%${cleanCity}%`));
       }
 
-      // Category filter (matches main category or any child subcategory)
+      // Category filter
       if (options.category && options.category !== 'all') {
         conditions.push(
           or(
             eq(schema.listings.categoryId, options.category),
-            eq(schema.listings.subcategoryId, options.category),
-            sql`${schema.listings.subcategoryId} IN (SELECT id FROM ${schema.categories} WHERE parent_id = ${options.category})`
+            eq(schema.listings.subcategoryId, options.category)
           )
         );
       }
 
       // Subcategory filter
       if (options.subcategory && options.subcategory !== 'all') {
-        conditions.push(
-          or(
-            eq(schema.listings.subcategoryId, options.subcategory),
-            eq(schema.listings.categoryId, options.subcategory)
-          )
-        );
+        conditions.push(eq(schema.listings.subcategoryId, options.subcategory));
       }
 
       // Search query (Sanitize % and _ wildcards to prevent query abuse)
@@ -238,77 +222,34 @@ export class ListingRepository {
       if (options.configuration && options.configuration !== 'all') {
         conditions.push(sql`${schema.listings.customAttributes}->>'configuration' = ${options.configuration}`);
       }
-      if (options.propertyStatus && options.propertyStatus !== 'all') {
-        conditions.push(sql`${schema.listings.customAttributes}->>'property_status' = ${options.propertyStatus}`);
-      }
-      if (options.listedBy && options.listedBy !== 'all') {
-        conditions.push(sql`${schema.listings.customAttributes}->>'listed_by' = ${options.listedBy}`);
-      }
       if (options.furnishing && options.furnishing !== 'all') {
         conditions.push(sql`${schema.listings.customAttributes}->>'furnishing' = ${options.furnishing}`);
-      }
-      if (options.minArea !== undefined && !isNaN(Number(options.minArea)) && isFinite(Number(options.minArea)) && Number(options.minArea) > 0) {
-        conditions.push(
-          sql`COALESCE(NULLIF(regexp_replace(${schema.listings.customAttributes}->>'carpet_area', '[^0-9.]', '', 'g'), '')::numeric, NULLIF(regexp_replace(${schema.listings.customAttributes}->>'built_up_area', '[^0-9.]', '', 'g'), '')::numeric, NULLIF(regexp_replace(${schema.listings.customAttributes}->>'plot_area', '[^0-9.]', '', 'g'), '')::numeric, 0) >= ${Number(options.minArea)}`
-        );
-      }
-      if (options.maxArea !== undefined && !isNaN(Number(options.maxArea)) && isFinite(Number(options.maxArea)) && Number(options.maxArea) > 0) {
-        conditions.push(
-          sql`COALESCE(NULLIF(regexp_replace(${schema.listings.customAttributes}->>'carpet_area', '[^0-9.]', '', 'g'), '')::numeric, NULLIF(regexp_replace(${schema.listings.customAttributes}->>'built_up_area', '[^0-9.]', '', 'g'), '')::numeric, NULLIF(regexp_replace(${schema.listings.customAttributes}->>'plot_area', '[^0-9.]', '', 'g'), '')::numeric, 0) <= ${Number(options.maxArea)}`
-        );
-      }
-      if (options.maxDeposit !== undefined && !isNaN(Number(options.maxDeposit)) && isFinite(Number(options.maxDeposit)) && Number(options.maxDeposit) > 0) {
-        conditions.push(
-          sql`COALESCE(NULLIF(regexp_replace(${schema.listings.customAttributes}->>'security_deposit', '[^0-9.]', '', 'g'), '')::numeric, 0) <= ${Number(options.maxDeposit)}`
-        );
-      }
-      if (options.brokerage && options.brokerage !== 'all') {
-        conditions.push(sql`${schema.listings.customAttributes}->>'brokerage' = ${options.brokerage}`);
-      }
-      if (options.tenantPreference && options.tenantPreference !== 'all') {
-        conditions.push(sql`${schema.listings.customAttributes}->>'tenant_preference' = ${options.tenantPreference}`);
-      }
-      if (options.availableFrom && options.availableFrom !== 'all') {
-        conditions.push(sql`${schema.listings.customAttributes}->>'available_from' = ${options.availableFrom}`);
-      }
-      if (options.petsAllowed && options.petsAllowed !== 'all') {
-        conditions.push(sql`${schema.listings.customAttributes}->>'pets_allowed' = ${options.petsAllowed}`);
       }
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-      // Execute Count with identical whereClause
+      // Execute Count
       const countRes = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.listings)
         .where(whereClause);
       const total = countRes[0]?.count || 0;
 
-      // Deterministic ordering: Boosted -> Featured -> Requested sort -> Tie-breaker by ID
-      const boostOrder = sql`CASE WHEN ${schema.listings.boostStatus} = 'active' AND ${schema.listings.boostExpiresAt} > NOW() THEN 1 ELSE 0 END DESC`;
-      const featuredOrder = sql`CASE WHEN ${schema.listings.isFeatured} = true AND (${schema.listings.featuredUntil} IS NULL OR ${schema.listings.featuredUntil} > NOW()) THEN 1 ELSE 0 END DESC`;
-
-      const orderClauses: any[] = [boostOrder, featuredOrder];
-      if (options.sort === 'price_low' || options.sort === 'price_asc') {
-        orderClauses.push(asc(schema.listings.price), desc(schema.listings.createdAt), desc(schema.listings.id));
-      } else if (options.sort === 'price_high' || options.sort === 'price_desc') {
-        orderClauses.push(desc(schema.listings.price), desc(schema.listings.createdAt), desc(schema.listings.id));
-      } else if (options.sort === 'oldest') {
-        orderClauses.push(asc(schema.listings.createdAt), asc(schema.listings.id));
-      } else {
-        orderClauses.push(desc(schema.listings.createdAt), desc(schema.listings.id));
-      }
-
+      // Ranking: Active Boosted First -> Featured -> CreatedAt desc
       const query = db
         .select()
         .from(schema.listings)
         .where(whereClause)
-        .orderBy(...orderClauses);
+        .orderBy(
+          sql`CASE WHEN ${schema.listings.boostStatus} = 'active' AND ${schema.listings.boostExpiresAt} > NOW() THEN 1 ELSE 0 END DESC`,
+          sql`CASE WHEN ${schema.listings.isFeatured} = true AND (${schema.listings.featuredUntil} IS NULL OR ${schema.listings.featuredUntil} > NOW()) THEN 1 ELSE 0 END DESC`,
+          desc(schema.listings.createdAt)
+        );
 
-      // Numeric bounds: Default 50 per page, Limit capped at [1, 500], Offset >= 0
+      // Numeric bounds: Limit capped at [1, 500], Offset >= 0
       const limitVal = options.limit !== undefined && !isNaN(Number(options.limit))
-        ? Math.min(Math.max(Number(options.limit) || 50, 1), 500)
-        : 50;
+        ? Math.min(Math.max(Number(options.limit) || 20, 1), 500)
+        : 20;
       const offsetVal = options.offset !== undefined && !isNaN(Number(options.offset))
         ? Math.max(Number(options.offset) || 0, 0)
         : 0;

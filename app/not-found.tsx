@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function NotFound() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 text-center text-slate-900 dark:text-white">
@@ -8,12 +10,12 @@ export default function NotFound() {
           The requested marketplace page or classified ad listing may have expired, been removed, or moved to a different city/category route.
         </p>
         <div className="pt-4">
-          <a
+          <Link
             href="/"
             className="inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors"
           >
             Return to Chillyads Homepage
-          </a>
+          </Link>
         </div>
       </div>
     </div>

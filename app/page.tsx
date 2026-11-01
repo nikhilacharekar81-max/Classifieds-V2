@@ -1,9 +1,6 @@
 import { AppClientRouter } from '@/components/AppClientRouter';
-import { listingRepository } from '@/server/repositories/listing.repository';
 import { serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 import type { Metadata } from 'next';
-
-export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: "Classifieds V2 — India's Leading Community Marketplace",
@@ -21,13 +18,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function HomePage() {
-  const latestResult = await listingRepository.findMarketplaceListings({
-    status: 'approved',
-    limit: 10,
-    offset: 0,
-  });
-
+export default function HomePage() {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -55,11 +46,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
-      <AppClientRouter
-        initialPath="/"
-        initialListings={latestResult.items}
-        initialTotalListings={latestResult.total}
-      />
+      <AppClientRouter initialPath="/" />
     </>
   );
 }

@@ -136,38 +136,29 @@ export const CategorySubNavbar: React.FC<CategorySubNavbarProps> = ({
                       in {city}
                     </span>
                   </div>
-                  <a
-                    href={buildChillyUrl({
-                      city,
-                      categoryId: 'all',
-                      subcategoryId: 'all',
-                      categories,
-                    })}
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate('all', 'all')}
                     className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
                   >
                     View All Classifieds Directory →
-                  </a>
+                  </button>
                 </div>
 
                 {/* 4-column category grid */}
                 <div className="grid grid-cols-4 gap-6 max-h-[460px] overflow-y-auto pr-2 scrollbar-thin">
                   {rootCategories.map((rootCat) => {
                     const children = categories.filter((c) => c.parentId === rootCat.id);
-                    const rootHref = buildChillyUrl({
-                      city,
-                      categoryId: rootCat.id,
-                      subcategoryId: 'all',
-                      categories,
-                    });
                     return (
                       <div key={rootCat.id} className="space-y-2">
                         {/* Parent Category Header */}
-                        <a
-                          href={rootHref}
+                        <button
+                          type="button"
+                          onClick={() => handleNavigate(rootCat.id, 'all')}
                           className="font-black text-xs text-slate-900 hover:text-blue-600 transition-colors block text-left truncate w-full cursor-pointer group"
                         >
                           <span className="group-hover:underline">{rootCat.name}</span>
-                        </a>
+                        </button>
 
                         {/* Child Subcategories */}
                         {children.length > 0 && (
@@ -176,16 +167,11 @@ export const CategorySubNavbar: React.FC<CategorySubNavbarProps> = ({
                               const isSubActive =
                                 activeCategoryId === rootCat.id &&
                                 activeSubcategoryId === sub.id;
-                              const subHref = buildChillyUrl({
-                                city,
-                                categoryId: rootCat.id,
-                                subcategoryId: sub.id,
-                                categories,
-                              });
                               return (
-                                <a
+                                <button
+                                  type="button"
                                   key={sub.id}
-                                  href={subHref}
+                                  onClick={() => handleNavigate(rootCat.id, sub.id)}
                                   className={`text-[11px] block text-left truncate w-full transition-colors cursor-pointer py-0.5 ${
                                     isSubActive
                                       ? 'text-blue-600 font-extrabold'
@@ -194,7 +180,7 @@ export const CategorySubNavbar: React.FC<CategorySubNavbarProps> = ({
                                   title={sub.name}
                                 >
                                   {sub.name}
-                                </a>
+                                </button>
                               );
                             })}
                           </div>
@@ -224,6 +210,10 @@ export const CategorySubNavbar: React.FC<CategorySubNavbarProps> = ({
                 <a
                   key={item.label}
                   href={href}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleNavigate(item.categoryId, item.subcategoryId || 'all');
+                  }}
                   className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all cursor-pointer shrink-0 select-none ${
                     isActive
                       ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-200 shadow-xs'
@@ -262,54 +252,41 @@ export const CategorySubNavbar: React.FC<CategorySubNavbarProps> = ({
             {/* Quick All Classifieds Button */}
             <div className="p-3 bg-blue-50/60 border-b border-blue-100 flex items-center justify-between">
               <span className="text-xs text-blue-950 font-bold">Browse everything in {city}</span>
-              <a
-                href={buildChillyUrl({
-                  city,
-                  categoryId: 'all',
-                  subcategoryId: 'all',
-                  categories,
-                })}
+              <button
+                type="button"
+                onClick={() => handleNavigate('all', 'all')}
                 className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
               >
                 View All
-              </a>
+              </button>
             </div>
 
             {/* Category List */}
             <div className="p-4 overflow-y-auto space-y-4 flex-1 divide-y divide-slate-100">
               {rootCategories.map((rootCat) => {
                 const children = categories.filter((c) => c.parentId === rootCat.id);
-                const rootHref = buildChillyUrl({
-                  city,
-                  categoryId: rootCat.id,
-                  subcategoryId: 'all',
-                  categories,
-                });
                 return (
                   <div key={rootCat.id} className="pt-3 first:pt-0 space-y-2">
-                    <a
-                      href={rootHref}
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate(rootCat.id, 'all')}
                       className="font-black text-xs text-slate-900 uppercase tracking-wider flex items-center justify-between w-full text-left cursor-pointer"
                     >
                       <span className="text-blue-900">{rootCat.name}</span>
                       <span className="text-[10px] text-blue-600 font-bold">All {rootCat.name} →</span>
-                    </a>
+                    </button>
 
                     {children.length > 0 && (
                       <div className="grid grid-cols-2 gap-1.5 pt-1">
                         {children.map((sub) => (
-                          <a
+                          <button
+                            type="button"
                             key={sub.id}
-                            href={buildChillyUrl({
-                              city,
-                              categoryId: rootCat.id,
-                              subcategoryId: sub.id,
-                              categories,
-                            })}
-                            className="text-left text-xs text-slate-600 hover:text-blue-600 p-2 rounded-lg bg-slate-50 border border-slate-100 truncate font-medium active:bg-blue-100 cursor-pointer block"
+                            onClick={() => handleNavigate(rootCat.id, sub.id)}
+                            className="text-left text-xs text-slate-600 hover:text-blue-600 p-2 rounded-lg bg-slate-50 border border-slate-100 truncate font-medium active:bg-blue-100 cursor-pointer"
                           >
                             {sub.name}
-                          </a>
+                          </button>
                         ))}
                       </div>
                     )}

@@ -78,17 +78,11 @@ const ICONS_MAP: Record<string, React.FC<{ className?: string }>> = {
 interface MarketplaceViewProps {
   initialRoute?: ParsedRoute;
   initialQuery?: Record<string, string>;
-  initialListings?: Listing[];
-  initialTotalListings?: number;
-  initialPage?: number;
 }
 
 export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   initialRoute,
   initialQuery,
-  initialListings,
-  initialTotalListings,
-  initialPage,
 }) => {
   const {
     listings,
@@ -134,24 +128,23 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Sort & Properties filters states (initialized from URL query parameters)
-  const [sortBy, setSortBy] = useState<string>(() => initialQuery?.sort || 'newest');
-  const [propTypeFilter, setPropTypeFilter] = useState<string>(() => initialQuery?.propertyType || 'all');
-  const [propConfigFilter, setPropConfigFilter] = useState<string>(() => initialQuery?.configuration || 'all');
-  const [propStatusFilter, setPropStatusFilter] = useState<string>(() => initialQuery?.propertyStatus || 'all');
-  const [propListedByFilter, setPropListedByFilter] = useState<string>(() => initialQuery?.listedBy || 'all');
-  const [propFurnishingFilter, setPropFurnishingFilter] = useState<string>(() => initialQuery?.furnishing || 'all');
-  const [propMinPriceFilter, setPropMinPriceFilter] = useState<string>(() => initialQuery?.minPrice || '');
-  const [propMaxPriceFilter, setPropMaxPriceFilter] = useState<string>(() => initialQuery?.maxPrice || '');
-  const [propMinAreaFilter, setPropMinAreaFilter] = useState<string>(() => initialQuery?.minArea || '');
-  const [propMaxAreaFilter, setPropMaxAreaFilter] = useState<string>(() => initialQuery?.maxArea || '');
+  // Properties filters states
+  const [propTypeFilter, setPropTypeFilter] = useState<string>('all');
+  const [propConfigFilter, setPropConfigFilter] = useState<string>('all');
+  const [propStatusFilter, setPropStatusFilter] = useState<string>('all');
+  const [propListedByFilter, setPropListedByFilter] = useState<string>('all');
+  const [propFurnishingFilter, setPropFurnishingFilter] = useState<string>('all');
+  const [propMinPriceFilter, setPropMinPriceFilter] = useState<string>('');
+  const [propMaxPriceFilter, setPropMaxPriceFilter] = useState<string>('');
+  const [propMinAreaFilter, setPropMinAreaFilter] = useState<string>('');
+  const [propMaxAreaFilter, setPropMaxAreaFilter] = useState<string>('');
 
   // Rental specific filters states
-  const [rentDepositMaxFilter, setRentDepositMaxFilter] = useState<string>(() => initialQuery?.maxDeposit || '');
-  const [rentBrokerageFilter, setRentBrokerageFilter] = useState<string>(() => initialQuery?.brokerage || 'all');
-  const [rentTenantPrefFilter, setRentTenantPrefFilter] = useState<string>(() => initialQuery?.tenantPreference || 'all');
-  const [rentAvailabilityFilter, setRentAvailabilityFilter] = useState<string>(() => initialQuery?.availableFrom || 'all');
-  const [rentPetsFilter, setRentPetsFilter] = useState<string>(() => initialQuery?.petsAllowed || 'all');
+  const [rentDepositMaxFilter, setRentDepositMaxFilter] = useState<string>('');
+  const [rentBrokerageFilter, setRentBrokerageFilter] = useState<string>('all');
+  const [rentTenantPrefFilter, setRentTenantPrefFilter] = useState<string>('all');
+  const [rentAvailabilityFilter, setRentAvailabilityFilter] = useState<string>('all');
+  const [rentPetsFilter, setRentPetsFilter] = useState<string>('all');
 
   // Synchronize view mode with active category or search route selection
   React.useEffect(() => {
@@ -167,10 +160,8 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
     ? categories.filter((c) => c.parentId === activeMainCat.id && c.isActive)
     : [];
 
-  const sourceListings = initialListings !== undefined ? initialListings : listings;
-
   // Filter approved listings for public marketplace
-  const marketplaceListings = sourceListings.filter((l) => {
+  const marketplaceListings = listings.filter((l) => {
     if (l.status !== 'approved' && !l.isFeatured) return false;
 
     // Category & Subcategory Hierarchy Filter
@@ -287,79 +278,22 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
       return distA - distB;
     }
 
-    // 4. Explicit sort selection (price_low, price_high, oldest, newest)
-    if (sortBy === 'price_low' || sortBy === 'price_asc') {
-      if (a.price !== b.price) return a.price - b.price;
-    } else if (sortBy === 'price_high' || sortBy === 'price_desc') {
-      if (b.price !== a.price) return b.price - a.price;
-    } else if (sortBy === 'oldest') {
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    }
-
-    // Default chronological sorting (newest first)
+    // 4. Chronological sorting (newest first)
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const ITEMS_PER_PAGE = 50;
-
-  const hasClientFilterDiverged =
-    sortBy !== (initialQuery?.sort || 'newest') ||
-    propTypeFilter !== (initialQuery?.propertyType || 'all') ||
-    propConfigFilter !== (initialQuery?.configuration || 'all') ||
-    propStatusFilter !== (initialQuery?.propertyStatus || 'all') ||
-    propListedByFilter !== (initialQuery?.listedBy || 'all') ||
-    propFurnishingFilter !== (initialQuery?.furnishing || 'all') ||
-    propMinPriceFilter !== (initialQuery?.minPrice || '') ||
-    propMaxPriceFilter !== (initialQuery?.maxPrice || '') ||
-    propMinAreaFilter !== (initialQuery?.minArea || '') ||
-    propMaxAreaFilter !== (initialQuery?.maxArea || '') ||
-    rentDepositMaxFilter !== (initialQuery?.maxDeposit || '') ||
-    rentBrokerageFilter !== (initialQuery?.brokerage || 'all') ||
-    rentTenantPrefFilter !== (initialQuery?.tenantPreference || 'all') ||
-    rentAvailabilityFilter !== (initialQuery?.availableFrom || 'all') ||
-    rentPetsFilter !== (initialQuery?.petsAllowed || 'all');
-
-  const isServerPaginated = initialTotalListings !== undefined && !hasClientFilterDiverged;
-  const totalMatchingListings = isServerPaginated
-    ? initialTotalListings
-    : sortedMarketplaceListings.length;
-  const totalPages = Math.max(1, Math.ceil(totalMatchingListings / ITEMS_PER_PAGE));
-  const rawPage = initialPage || Math.max(1, Number(initialQuery?.page) || 1);
-  const currentPage = Math.min(Math.max(1, rawPage), totalPages);
-
-  const paginatedMarketplaceListings = isServerPaginated
-    ? sortedMarketplaceListings
-    : sortedMarketplaceListings.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-      );
-
-  const totalDirectoryListings =
-    initialTotalListings !== undefined
-      ? initialTotalListings
-      : rootCategories.reduce((sum, c) => sum + (c.listingCount || 0), 0) || sortedMarketplaceListings.length;
-
-  // Compute smart windowed page numbers (e.g. 1 ... 4 5 6 ... 20)
-  const paginationWindow = useMemo(() => {
-    const pages: Array<number | 'ellipsis-start' | 'ellipsis-end'> = [];
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-      return pages;
-    }
-    pages.push(1);
-    const start = Math.max(2, currentPage - 2);
-    const end = Math.min(totalPages - 1, currentPage + 2);
-    if (start > 2) pages.push('ellipsis-start');
-    for (let i = start; i <= end; i++) pages.push(i);
-    if (end < totalPages - 1) pages.push('ellipsis-end');
-    pages.push(totalPages);
-    return pages;
-  }, [currentPage, totalPages]);
+  const ITEMS_PER_PAGE = 12;
+  const currentPage = Math.max(1, Number(initialQuery?.page) || 1);
+  const totalPages = Math.max(1, Math.ceil(sortedMarketplaceListings.length / ITEMS_PER_PAGE));
+  const paginatedMarketplaceListings = sortedMarketplaceListings.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   // Filter and sort for the "Latest Ads" section under directory
   const latestAds = useMemo(() => {
     // Filter active/approved ads
-    let filtered = sourceListings.filter((l) => l.status === 'approved' || l.isFeatured);
+    let filtered = listings.filter((l) => l.status === 'approved' || l.isFeatured);
 
     // Filter by selected city if any
     if (effectiveCity !== 'All India' && effectiveCity !== 'All Cities') {
@@ -373,7 +307,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
       if (!a.isFeatured && b.isFeatured) return 1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }).slice(0, 10);
-  }, [sourceListings, effectiveCity]);
+  }, [listings, effectiveCity]);
 
   const getCategoryIcon = (iconName?: string) => {
     const IconComp = (iconName && ICONS_MAP[iconName]) || Layers;
@@ -431,7 +365,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   };
 
   const baseListingPath = isSearchRoute
-    ? '/search'
+    ? `/search${effectiveSearch ? `?q=${encodeURIComponent(effectiveSearch)}` : ''}`
     : buildChillyUrl({
         city: effectiveCity,
         categoryId: effectiveCategory,
@@ -439,62 +373,12 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
         categories,
       });
 
-  const buildFilterAndPageHref = (pageNum: number, overrides?: Record<string, string | undefined>) => {
-    const params = new URLSearchParams();
-    if (isSearchRoute && effectiveSearch) {
-      params.set('q', effectiveSearch);
-    }
-    if (isSearchRoute && effectiveCity && effectiveCity !== 'All India') {
-      params.set('city', effectiveCity);
-    }
-    if (isSearchRoute && effectiveCategory && effectiveCategory !== 'all') {
-      params.set('category', effectiveCategory);
-    }
-    if (isSearchRoute && effectiveSubcategory && effectiveSubcategory !== 'all') {
-      params.set('subcategory', effectiveSubcategory);
-    }
-
-    const activeSort = overrides && 'sort' in overrides ? overrides.sort : sortBy;
-    if (activeSort && activeSort !== 'newest') {
-      params.set('sort', activeSort);
-    }
-    if (propTypeFilter !== 'all') params.set('propertyType', propTypeFilter);
-    if (propConfigFilter !== 'all') params.set('configuration', propConfigFilter);
-    if (propStatusFilter !== 'all') params.set('propertyStatus', propStatusFilter);
-    if (propListedByFilter !== 'all') params.set('listedBy', propListedByFilter);
-    if (propFurnishingFilter !== 'all') params.set('furnishing', propFurnishingFilter);
-    if (propMinPriceFilter) params.set('minPrice', propMinPriceFilter);
-    if (propMaxPriceFilter) params.set('maxPrice', propMaxPriceFilter);
-    if (propMinAreaFilter) params.set('minArea', propMinAreaFilter);
-    if (propMaxAreaFilter) params.set('maxArea', propMaxAreaFilter);
-    if (rentDepositMaxFilter) params.set('maxDeposit', rentDepositMaxFilter);
-    if (rentBrokerageFilter !== 'all') params.set('brokerage', rentBrokerageFilter);
-    if (rentTenantPrefFilter !== 'all') params.set('tenantPreference', rentTenantPrefFilter);
-    if (rentAvailabilityFilter !== 'all') params.set('availableFrom', rentAvailabilityFilter);
-    if (rentPetsFilter !== 'all') params.set('petsAllowed', rentPetsFilter);
-
-    if (overrides) {
-      for (const [k, v] of Object.entries(overrides)) {
-        if (k === 'sort') continue;
-        if (v && v !== 'all') {
-          params.set(k, v);
-        } else {
-          params.delete(k);
-        }
-      }
-    }
-
-    if (pageNum > 1) {
-      params.set('page', String(pageNum));
-    } else {
-      params.delete('page');
-    }
-
-    const qs = params.toString();
-    return qs ? `${baseListingPath}?${qs}` : baseListingPath;
+  const buildPageHref = (pageNum: number) => {
+    if (pageNum <= 1) return baseListingPath;
+    return baseListingPath.includes('?')
+      ? `${baseListingPath}&page=${pageNum}`
+      : `${baseListingPath}?page=${pageNum}`;
   };
-
-  const buildPageHref = (pageNum: number) => buildFilterAndPageHref(pageNum);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans overflow-x-hidden">
@@ -535,6 +419,14 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
 
               <a
                 href="/"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setSelectedMarketplaceCategory('all');
+                  setSelectedMarketplaceSubcategory('all');
+                  setMarketplaceSearch('');
+                  setActiveViewMode('directory');
+                  navigateTo('/');
+                }}
                 className="w-12 h-10 rounded-xl bg-slate-950 text-white flex items-center justify-center font-black text-2xl tracking-tighter cursor-pointer hover:bg-slate-800 transition-colors"
               >
                 chillyads
@@ -572,6 +464,10 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
             <div className="flex items-center gap-2 sm:gap-3">
               <a
                 href="/my-account"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateTo('/my-account');
+                }}
                 className="px-3 py-2 text-slate-800 hover:text-blue-600 font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 rounded-xl hover:bg-slate-100"
                 title="User Account & Ads Panel"
               >
@@ -589,6 +485,10 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
 
               <a
                 href="/post"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateTo('/post');
+                }}
                 className="px-4 sm:px-5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 border-2 border-slate-950 transition-all uppercase tracking-wider cursor-pointer"
               >
                 <Plus className="w-4 h-4 stroke-[3]" /> <span className="hidden xs:inline">+</span> SELL
@@ -987,6 +887,13 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
               <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                 <a
                   href="/"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setSelectedMarketplaceCity('All India');
+                    setSelectedMarketplaceCategory('all');
+                    setSelectedMarketplaceSubcategory('all');
+                    navigateTo('/');
+                  }}
                   className="hover:text-blue-600 font-medium cursor-pointer"
                 >
                   Home
@@ -996,6 +903,10 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   <>
                     <a
                       href={buildChillyUrl({ city: effectiveCity, categories })}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateTo(buildChillyUrl({ city: effectiveCity, categories }));
+                      }}
                       className="font-bold text-blue-600 hover:underline"
                     >
                       {effectiveCity}
@@ -1014,7 +925,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   : 'Classified Ads in India — Buy & Sell Cars, Mobiles, Real Estate, Jobs & Services'}
               </h1>
               <p className="text-xs text-slate-600">
-                Explore {totalDirectoryListings.toLocaleString()} verified classified listings across {rootCategories.length} categories in {effectiveCity && effectiveCity !== 'All India' ? effectiveCity : 'India'}. Direct contact with verified local sellers.
+                Explore {marketplaceListings.length} verified classified listings across {rootCategories.length} categories in {effectiveCity && effectiveCity !== 'All India' ? effectiveCity : 'India'}. Direct contact with verified local sellers.
               </p>
             </div>
 
@@ -1079,7 +990,11 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                             <h3 className="font-extrabold text-xs text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1" title={listing.title}>
                               <a
                                 href={listingUrl}
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  navigateTo(listingUrl);
+                                }}
                                 className="hover:underline"
                               >
                                 {listing.title}
@@ -1120,6 +1035,13 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   {/* Reset to Directory Option */}
                   <a
                     href={buildChillyUrl({ city: effectiveCity, categories })}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveViewMode('directory');
+                      setSelectedMarketplaceCategory('all');
+                      setSelectedMarketplaceSubcategory('all');
+                      navigateTo(buildChillyUrl({ city: effectiveCity, categories }));
+                    }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2.5 cursor-pointer hover:bg-slate-50 text-slate-500"
                   >
                     <FolderTree className="w-4 h-4 text-slate-400" />
@@ -1141,6 +1063,13 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                       <div key={cat.id} className="space-y-1">
                         <a
                           href={catTargetUrl}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setSelectedMarketplaceCategory(cat.id);
+                            setSelectedMarketplaceSubcategory('all');
+                            setActiveViewMode('listings');
+                            navigateTo(catTargetUrl);
+                          }}
                           className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
                             isSelected
                               ? 'bg-blue-50 text-blue-700 shadow-xs'
@@ -1163,6 +1092,12 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                           <div className="pl-6 pr-2 py-1 space-y-1 border-l-2 border-slate-100 ml-5 animate-in slide-in-from-top-1 duration-150">
                             <a
                               href={catTargetUrl}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setSelectedMarketplaceSubcategory('all');
+                                setActiveViewMode('listings');
+                                navigateTo(catTargetUrl);
+                              }}
                               className={`w-full text-left py-1 text-[11px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                                 effectiveSubcategory === 'all'
                                   ? 'text-blue-600 font-bold'
@@ -1185,6 +1120,12 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                                 <a
                                   key={sub.id}
                                   href={subTargetUrl}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setSelectedMarketplaceSubcategory(sub.id);
+                                    setActiveViewMode('listings');
+                                    navigateTo(subTargetUrl);
+                                  }}
                                   className={`w-full text-left py-1 text-[11px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                                     isSubSelected
                                       ? 'text-blue-600 font-bold'
@@ -1490,6 +1431,13 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                     <a
                       href="/"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setActiveViewMode('directory');
+                        setSelectedMarketplaceCategory('all');
+                        setSelectedMarketplaceSubcategory('all');
+                        navigateTo('/');
+                      }}
                       className="hover:text-blue-600 font-medium cursor-pointer"
                     >
                       Home
@@ -1500,6 +1448,13 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                         <ChevronRight className="w-3 h-3 text-slate-400" />
                         <a
                           href={buildChillyUrl({ city: effectiveCity, categories })}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setActiveViewMode('directory');
+                            setSelectedMarketplaceCategory('all');
+                            setSelectedMarketplaceSubcategory('all');
+                            navigateTo(buildChillyUrl({ city: effectiveCity, categories }));
+                          }}
                           className="hover:text-blue-600 font-medium cursor-pointer"
                         >
                           {effectiveCity}
@@ -1517,6 +1472,18 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                             subcategoryId: 'all',
                             categories,
                           })}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setSelectedMarketplaceCategory(activeMainCat.id);
+                            setSelectedMarketplaceSubcategory('all');
+                            const targetUrl = buildChillyUrl({
+                              city: effectiveCity,
+                              categoryId: activeMainCat.id,
+                              subcategoryId: 'all',
+                              categories,
+                            });
+                            navigateTo(targetUrl);
+                          }}
                           className={`hover:text-blue-600 font-medium cursor-pointer ${
                             effectiveSubcategory === 'all' ? 'text-slate-900 font-bold' : ''
                           }`}
@@ -1556,35 +1523,22 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                     in {effectiveCity}
                   </h1>
                   <p className="text-xs text-slate-500">
-                    Showing {paginatedMarketplaceListings.length} of {totalMatchingListings.toLocaleString()} verified listings (Page {currentPage} of {totalPages} • Max {ITEMS_PER_PAGE} per page)
+                    Showing {paginatedMarketplaceListings.length} of {marketplaceListings.length} verified listings
+                    {totalPages > 1 ? ` (Page ${currentPage} of ${totalPages})` : ''}
                   </p>
                 </div>
 
-                {/* Action buttons & Sort selector on right */}
-                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                  <div className="flex items-center gap-1.5">
-                    <label htmlFor="marketplace-sort" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      Sort:
-                    </label>
-                    <select
-                      id="marketplace-sort"
-                      value={sortBy}
-                      onChange={(e) => {
-                        const newSort = e.target.value;
-                        setSortBy(newSort);
-                        navigateTo(buildFilterAndPageHref(1, { sort: newSort }));
-                      }}
-                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-blue-600 cursor-pointer"
-                    >
-                      <option value="newest">Newest First</option>
-                      <option value="price_low">Price: Low to High</option>
-                      <option value="price_high">Price: High to Low</option>
-                      <option value="oldest">Oldest First</option>
-                    </select>
-                  </div>
-
+                {/* Action buttons on right */}
+                <div className="flex items-center gap-2.5 shrink-0">
                   <a
                     href={buildChillyUrl({ city: effectiveCity, categories })}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveViewMode('directory');
+                      setSelectedMarketplaceCategory('all');
+                      setSelectedMarketplaceSubcategory('all');
+                      navigateTo(buildChillyUrl({ city: effectiveCity, categories }));
+                    }}
                     className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <FolderTree className="w-3.5 h-3.5 text-blue-600" />
@@ -1594,6 +1548,15 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   {(effectiveCategory !== 'all' || effectiveCity !== 'All India' || effectiveSearch) && (
                     <a
                       href="/"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setSelectedMarketplaceCategory('all');
+                        setSelectedMarketplaceSubcategory('all');
+                        setSelectedMarketplaceCity('All India');
+                        setMarketplaceSearch('');
+                        setActiveViewMode('directory');
+                        navigateTo('/');
+                      }}
                       className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" /> Clear All Filters
@@ -1614,6 +1577,10 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   </p>
                   <a
                     href="/post"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigateTo('/post');
+                    }}
                     className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow cursor-pointer transition-colors"
                   >
                     Post an Ad in this Subcategory
@@ -1767,7 +1734,11 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                               <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 mt-1.5">
                                 <a
                                   href={listingUrl}
-                                  onClick={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigateTo(listingUrl);
+                                  }}
                                   className="hover:text-blue-600 hover:underline"
                                 >
                                   {listing.title}
@@ -1795,29 +1766,22 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   >
                     <span className="text-xs text-slate-500">
                       Page <strong className="text-slate-900">{currentPage}</strong> of{' '}
-                      <strong className="text-slate-900">{totalPages}</strong> ({totalMatchingListings.toLocaleString()} total listings • Max {ITEMS_PER_PAGE} per page)
+                      <strong className="text-slate-900">{totalPages}</strong> ({marketplaceListings.length} total listings)
                     </span>
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       {currentPage > 1 && (
                         <a
                           href={buildPageHref(currentPage - 1)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            navigateTo(buildPageHref(currentPage - 1));
+                          }}
                           className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Previous
                         </a>
                       )}
-                      {paginationWindow.map((item) => {
-                        if (item === 'ellipsis-start' || item === 'ellipsis-end') {
-                          return (
-                            <span
-                              key={item}
-                              className="px-2 py-1.5 text-xs font-bold text-slate-400 select-none"
-                            >
-                              …
-                            </span>
-                          );
-                        }
-                        const pageNum = item;
+                      {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => {
                         const pageHref = buildPageHref(pageNum);
                         const isActivePage = pageNum === currentPage;
                         return (
@@ -1825,6 +1789,10 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                             key={pageNum}
                             href={pageHref}
                             aria-current={isActivePage ? 'page' : undefined}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigateTo(pageHref);
+                            }}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                               isActivePage
                                 ? 'bg-blue-600 text-white shadow-xs'
@@ -1838,6 +1806,10 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                       {currentPage < totalPages && (
                         <a
                           href={buildPageHref(currentPage + 1)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            navigateTo(buildPageHref(currentPage + 1));
+                          }}
                           className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Next

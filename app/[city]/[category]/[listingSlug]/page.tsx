@@ -1,22 +1,18 @@
 import type { Metadata } from 'next';
 import { listingRepository } from '@/server/repositories/listing.repository';
-import { listingService } from '@/server/services/listing.service';
 import { categoryRepository } from '@/server/repositories/category.repository';
 import { locationRepository } from '@/server/repositories/location.repository';
 import { stripChillySuffixes, unslugifyCity, unslugifyCategory, serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 import { AppClientRouter } from '@/components/AppClientRouter';
 import { notFound } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
 interface ListingOrSubcategoryPageProps {
   params: Promise<{ city: string; category: string; listingSlug: string }>;
   searchParams?: Promise<Record<string, string | undefined>>;
 }
 
-export async function generateMetadata({ params, searchParams }: ListingOrSubcategoryPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: ListingOrSubcategoryPageProps): Promise<Metadata> {
   const { city, category, listingSlug } = await params;
-  const resolvedSearch = searchParams ? await searchParams : {};
   const { itemId, cleanSlug: cleanThirdSlug } = stripChillySuffixes(listingSlug);
 
   if (itemId) {
@@ -60,13 +56,6 @@ export async function generateMetadata({ params, searchParams }: ListingOrSubcat
     };
   }
 
-  const pageNum = Math.max(1, Number(resolvedSearch.page) || 1);
-  const pageSuffix = pageNum > 1 ? ` (Page ${pageNum})` : '';
-  const canonicalUrl =
-    pageNum > 1
-      ? `/${city}/${category}/${listingSlug}?page=${pageNum}`
-      : `/${city}/${category}/${listingSlug}`;
-
   const { cleanSlug: cleanCitySlug } = stripChillySuffixes(city);
   const [loc, categories] = await Promise.all([
     locationRepository.findBySlug(cleanCitySlug).then((r) => r || locationRepository.findBySlug(city)),
@@ -79,15 +68,15 @@ export async function generateMetadata({ params, searchParams }: ListingOrSubcat
 
   if (subCat) {
     const cityName = loc ? loc.name : unslugifyCity(city).cityName;
-    const title = `${subCat.name} in ${cityName}${pageSuffix} — Buy, Sell & Verified Ads | Classifieds V2`;
-    const description = `Browse verified ${subCat.name} classified ads in ${cityName}${pageSuffix}. Compare prices, view real photos, and contact local sellers directly.`;
+    const title = `${subCat.name} in ${cityName} — Buy, Sell & Verified Ads | Classifieds V2`;
+    const description = `Browse verified ${subCat.name} classified ads in ${cityName}. Compare prices, view real photos, and contact local sellers directly.`;
 
     return {
       title,
       description,
       openGraph: { title, description, type: 'website' },
       twitter: { card: 'summary_large_image', title, description },
-      alternates: { canonical: canonicalUrl },
+      alternates: { canonical: `/${city}/${category}/${listingSlug}` },
     };
   }
 
@@ -112,13 +101,6 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
     if (!listing || listing.status !== 'approved') {
       notFound();
     }
-
-    const relatedResult = await listingRepository.findMarketplaceListings({
-      status: 'approved',
-      category: listing.categoryId,
-      limit: 5,
-      offset: 0,
-    });
 
     const jsonLd = {
       '@context': 'https://schema.org/',
@@ -148,7 +130,6 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
         <AppClientRouter
           initialPath={`/${city}/${category}/${listingSlug}`}
           initialListing={listing}
-          initialListings={relatedResult.items}
         />
       </>
     );
@@ -169,14 +150,6 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
 
   const { cityName } = unslugifyCity(city, locations);
   const parentCat = categories.find((c) => c.id === matchedSubCat.parentId);
-
-  const paginated = await listingService.getPaginatedPageListings({
-    city: cityName !== 'All India' ? cityName : undefined,
-    category: matchedSubCat.parentId || matchedSubCat.id,
-    subcategory: matchedSubCat.parentId ? matchedSubCat.id : undefined,
-    query: cleanQuery,
-    pageSize: 50,
-  });
 
   const breadcrumbJsonLd = {
     '@context': 'https://schema.org',
@@ -222,9 +195,6 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
       <AppClientRouter
         initialPath={`/${city}/${category}/${listingSlug}`}
         initialQuery={cleanQuery}
-        initialListings={paginated.items}
-        initialTotalListings={paginated.total}
-        initialPage={paginated.page}
       />
     </>
   );

@@ -14,29 +14,15 @@ export async function GET(req: NextRequest) {
   const requestedStatus = searchParams.get('status') || undefined;
   const sellerId = searchParams.get('sellerId') || undefined;
 
-  const sort = searchParams.get('sort') || undefined;
-  const propertyType = searchParams.get('propertyType') || undefined;
-  const configuration = searchParams.get('configuration') || undefined;
-  const propertyStatus = searchParams.get('propertyStatus') || undefined;
-  const listedBy = searchParams.get('listedBy') || undefined;
-  const furnishing = searchParams.get('furnishing') || undefined;
-  const brokerage = searchParams.get('brokerage') || undefined;
-  const tenantPreference = searchParams.get('tenantPreference') || undefined;
-  const availableFrom = searchParams.get('availableFrom') || undefined;
-  const petsAllowed = searchParams.get('petsAllowed') || undefined;
-
   // Validate and clamp numeric bounds
-  const parsePos = (raw: string | null) =>
-    raw !== null && raw !== '' && !isNaN(Number(raw)) && isFinite(Number(raw)) && Number(raw) >= 0 ? Number(raw) : undefined;
+  const rawMin = searchParams.get('minPrice');
+  const minPrice = rawMin !== null && !isNaN(Number(rawMin)) && isFinite(Number(rawMin)) && Number(rawMin) >= 0 ? Number(rawMin) : undefined;
 
-  const minPrice = parsePos(searchParams.get('minPrice'));
-  const maxPrice = parsePos(searchParams.get('maxPrice'));
-  const minArea = parsePos(searchParams.get('minArea'));
-  const maxArea = parsePos(searchParams.get('maxArea'));
-  const maxDeposit = parsePos(searchParams.get('maxDeposit'));
+  const rawMax = searchParams.get('maxPrice');
+  const maxPrice = rawMax !== null && !isNaN(Number(rawMax)) && isFinite(Number(rawMax)) && Number(rawMax) >= 0 ? Number(rawMax) : undefined;
 
   const rawLimit = searchParams.get('limit');
-  const limit = rawLimit !== null && !isNaN(Number(rawLimit)) ? Math.min(Math.max(Number(rawLimit) || 50, 1), 500) : 50;
+  const limit = rawLimit !== null && !isNaN(Number(rawLimit)) ? Math.min(Math.max(Number(rawLimit) || 20, 1), 500) : 20;
 
   const rawOffset = searchParams.get('offset');
   const offset = rawOffset !== null && !isNaN(Number(rawOffset)) ? Math.max(Number(rawOffset) || 0, 0) : 0;
@@ -65,19 +51,6 @@ export async function GET(req: NextRequest) {
     sellerId,
     minPrice,
     maxPrice,
-    propertyType,
-    configuration,
-    propertyStatus,
-    listedBy,
-    furnishing,
-    minArea,
-    maxArea,
-    maxDeposit,
-    brokerage,
-    tenantPreference,
-    availableFrom,
-    petsAllowed,
-    sort,
     limit,
     offset,
   });

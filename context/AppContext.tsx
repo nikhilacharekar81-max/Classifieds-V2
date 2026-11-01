@@ -521,17 +521,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     }
   };
 
-  // Synchronize state with PostgreSQL backend on mount via /api/bootstrap only when needed (e.g. admin/user panel or if SSR data was not provided)
+  // Synchronize state with PostgreSQL backend on mount via /api/bootstrap (only if SSR data was not provided)
   useEffect(() => {
-    if (initialServerData) {
-      const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
-      const needsFullCatalogue =
-        pathname.startsWith('/admin') ||
-        pathname.startsWith('/my-account') ||
-        pathname.startsWith('/my-ads');
-      if (!needsFullCatalogue) {
-        return;
-      }
+    if (initialServerData?.listings && initialServerData.listings.length > 0) {
+      return;
     }
     refreshData();
   }, [initialServerData]);

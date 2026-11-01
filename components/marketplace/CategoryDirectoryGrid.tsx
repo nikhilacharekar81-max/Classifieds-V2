@@ -369,7 +369,7 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
             const isExpanded = expandedCats[cat.id] || searchQuery.length > 0;
             const visibleSubs = isExpanded ? subs : subs.slice(0, 6);
             const hasMore = subs.length > 6 && !searchQuery;
-            const totalLiveAds = cat.listingCount > 0 ? cat.listingCount : (listingCounts.parentMap[cat.id] || 0);
+            const totalLiveAds = (listingCounts.parentMap[cat.id] || 0) + cat.listingCount;
             const catUrl = buildChillyUrl({
               city: currentCity,
               categoryId: cat.id,
@@ -390,6 +390,10 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
                   {/* Category Header Card */}
                   <a
                     href={catUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleCategoryClick(cat.id);
+                    }}
                     className={`p-4 border-b ${theme.border} ${theme.bg} cursor-pointer transition-colors flex items-center justify-between gap-3`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -431,7 +435,7 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
                     ) : (
                       visibleSubs.map((sub) => {
                         const isSubSelected = selectedSubcategoryId === sub.id;
-                        const subAds = sub.listingCount > 0 ? sub.listingCount : (listingCounts.subMap[sub.id] || 0);
+                        const subAds = (listingCounts.subMap[sub.id] || 0) + sub.listingCount;
                         const subUrl = buildChillyUrl({
                           city: currentCity,
                           categoryId: cat.id,
@@ -443,6 +447,10 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
                           <a
                             key={sub.id}
                             href={subUrl}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleSubcategoryClick(cat.id, sub.id);
+                            }}
                             className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-all cursor-pointer group/item ${
                               isSubSelected
                                 ? 'bg-blue-600 text-white font-bold shadow-xs'
@@ -508,6 +516,10 @@ export const CategoryDirectoryGrid: React.FC<CategoryDirectoryGridProps> = ({
 
                   <a
                     href={catUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleCategoryClick(cat.id);
+                    }}
                     className="text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-0.5 cursor-pointer ml-auto"
                   >
                     <span>View all</span>
