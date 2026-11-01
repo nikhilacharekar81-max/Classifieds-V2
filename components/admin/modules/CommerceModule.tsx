@@ -53,16 +53,17 @@ export const CommerceModule: React.FC = () => {
   });
 
   useEffect(() => {
-    if (editingPkg) {
+    const pkg = editPkgId ? packages.find((p) => p.id === editPkgId) : null;
+    if (pkg) {
       setPkgFormData({
-        name: editingPkg.name,
-        badge: editingPkg.badge,
-        type: editingPkg.type,
-        durationDays: editingPkg.durationDays,
-        durationHours: editingPkg.durationHours || editingPkg.durationDays * 24,
-        price: editingPkg.price,
-        discountPrice: editingPkg.discountPrice || 0,
-        featuresString: editingPkg.features.join(', '),
+        name: pkg.name,
+        badge: pkg.badge,
+        type: pkg.type,
+        durationDays: pkg.durationDays,
+        durationHours: pkg.durationHours || pkg.durationDays * 24,
+        price: pkg.price,
+        discountPrice: pkg.discountPrice || 0,
+        featuresString: pkg.features.join(', '),
       });
     } else if (isAddPkgRoute) {
       setPkgFormData({
@@ -76,7 +77,7 @@ export const CommerceModule: React.FC = () => {
         featuresString: 'Instant top placement in category feeds, High-visibility BOOSTED label, Up to 5x more clicks',
       });
     }
-  }, [editingPkg, isAddPkgRoute]);
+  }, [editPkgId, isAddPkgRoute]);
 
   const handleSavePackage = (e: React.FormEvent) => {
     e.preventDefault();

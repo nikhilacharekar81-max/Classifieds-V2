@@ -11,13 +11,13 @@ export const UsPrivacyModal: React.FC = () => {
   const [optedOut, setOptedOut] = useState<boolean>(false);
 
   useEffect(() => {
+    if (!isUsPrivacyModalOpen) return;
     const currentSignal = localStorage.getItem('us_privacy');
-    if (currentSignal === '1YYY') {
-      setOptedOut(true);
-    } else {
-      setOptedOut(false);
+    const isOptedOutSignal = currentSignal === '1YYY';
+    if (isOptedOutSignal !== optedOut) {
+      setOptedOut(isOptedOutSignal);
     }
-  }, [isUsPrivacyModalOpen]);
+  }, [isUsPrivacyModalOpen, optedOut]);
 
   if (!isUsPrivacyModalOpen) return null;
 

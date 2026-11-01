@@ -318,6 +318,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: 'Page Content Saved',
       message: `Updated "${updatedPage.title}" (${updatedPage.slug}).`,
     });
+    fetch(`/api/admin/cms/${updatedPage.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPage),
+    }).catch(() => {});
   };
 
   const addCmsPage = (newPage: Omit<CmsPage, 'id' | 'updatedAt'>) => {
@@ -332,6 +337,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: 'New Page Published',
       message: `Page "${page.title}" created successfully.`,
     });
+    fetch('/api/admin/cms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(page),
+    }).catch(() => {});
   };
 
   const deleteCmsPage = (id: string) => {
@@ -342,6 +352,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: 'Page Deleted',
       message: target ? `Removed page "${target.title}".` : 'Page deleted.',
     });
+    fetch(`/api/admin/cms/${id}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   };
 
   const openReportModal = (type: 'ad' | 'user' = 'ad', targetId?: string, targetTitle?: string) => {
@@ -1382,18 +1395,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: catData.parentId ? 'Subcategory Created' : 'Category Created',
       message: `"${newCat.name}" has been added to taxonomy.`,
     });
+    fetch('/api/admin/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCat),
+    }).catch(() => {});
   };
 
   const updateCategory = (cat: Category) => {
     setCategories(prev => prev.map(c => (c.id === cat.id ? cat : c)));
     recordAuditLog('UPDATE_CATEGORY', 'Marketplace / Categories', cat.id, cat.name, 'Updated category SEO & hierarchy configuration');
     addToast({ type: 'success', title: 'Category Updated', message: cat.name });
+    fetch(`/api/admin/categories/${cat.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cat),
+    }).catch(() => {});
   };
 
   const toggleCategoryStatus = (id: string) => {
+    const target = categories.find(c => c.id === id);
+    if (!target) return;
+    const updatedStatus = !target.isActive;
     setCategories(prev =>
-      prev.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
+      prev.map(c => (c.id === id ? { ...c, isActive: updatedStatus } : c))
     );
+    fetch(`/api/admin/categories/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: updatedStatus }),
+    }).catch(() => {});
   };
 
   const deleteCategory = (id: string) => {
@@ -1404,6 +1435,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       recordAuditLog('DELETE_CATEGORY', 'Marketplace / Categories', id, cat.name, 'Deleted category and associated subcategories');
       addToast({ type: 'warning', title: 'Category Deleted', message: cat.name });
     }
+    fetch(`/api/admin/categories/${id}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   };
 
   const addCustomField = (field: Omit<CustomFieldDefinition, 'id'>) => {
@@ -1440,12 +1474,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     setLocations(prev => [...prev, newLoc]);
     recordAuditLog('CREATE_LOCATION', 'Marketplace / Locations', id, newLoc.name, `Created ${newLoc.type} in Country -> City hierarchy`);
     addToast({ type: 'success', title: `${newLoc.type === 'country' ? 'Country' : 'City'} Added`, message: newLoc.name });
+    fetch('/api/admin/locations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLoc),
+    }).catch(() => {});
   };
 
   const updateLocation = (loc: LocationItem) => {
     setLocations(prev => prev.map(l => (l.id === loc.id ? loc : l)));
     recordAuditLog('UPDATE_LOCATION', 'Marketplace / Locations', loc.id, loc.name, `Updated location details`);
     addToast({ type: 'success', title: 'Location Updated', message: loc.name });
+    fetch(`/api/admin/locations/${loc.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(loc),
+    }).catch(() => {});
   };
 
   const deleteLocation = (id: string) => {
@@ -1455,12 +1499,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       recordAuditLog('DELETE_LOCATION', 'Marketplace / Locations', id, loc.name, `Deleted location and linked cities`);
       addToast({ type: 'warning', title: 'Location Removed', message: loc.name });
     }
+    fetch(`/api/admin/locations/${id}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   };
 
   const toggleLocationPopular = (id: string) => {
+    const target = locations.find(l => l.id === id);
+    if (!target) return;
+    const updatedPopular = !target.popular;
     setLocations(prev =>
-      prev.map(l => (l.id === id ? { ...l, popular: !l.popular } : l))
+      prev.map(l => (l.id === id ? { ...l, popular: updatedPopular } : l))
     );
+    fetch(`/api/admin/locations/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ popular: updatedPopular }),
+    }).catch(() => {});
   };
 
   // User Actions
@@ -1471,6 +1526,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: 'Profile Updated',
       message: 'Your account settings have been saved.',
     });
+    fetch(`/api/admin/users/${updatedUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedUser),
+    }).catch(() => {});
   };
 
   const verifyUserKyc = (userId: string, status: 'verified' | 'rejected') => {
@@ -1485,6 +1545,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: status === 'verified' ? 'User KYC Verified' : 'User KYC Rejected',
       message: user.name,
     });
+    fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify_kyc', userId, status }),
+    }).catch(() => {});
   };
 
   const banUser = (userId: string, reason: string) => {
@@ -1503,6 +1568,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: 'User Banned',
       message: `${user.name} has been banned. All active listings taken down.`,
     });
+    fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ban', userId, reason }),
+    }).catch(() => {});
   };
 
   const unbanUser = (userId: string) => {
@@ -1517,6 +1587,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: 'User Re-activated',
       message: `${user.name} account restored to active status.`,
     });
+    fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'unban', userId }),
+    }).catch(() => {});
   };
 
   // Moderation
@@ -1538,6 +1613,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       title: 'Report Processed',
       message: `Status: ${actionType.toUpperCase()}`,
     });
+    fetch('/api/admin/moderation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'action_report', reportId, note: actionNote, actionType }),
+    }).catch(() => {});
   };
 
   const addModerationRule = (rule: Omit<ModerationRule, 'id'>) => {
@@ -1545,32 +1625,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     setRules(prev => [...prev, { ...rule, id }]);
     recordAuditLog('CREATE_MODERATION_RULE', 'Moderation / Rules', id, rule.title, `Automated action: ${rule.action}`);
     addToast({ type: 'success', title: 'Moderation Rule Created', message: rule.title });
+    fetch('/api/admin/moderation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_rule', ruleData: rule }),
+    }).catch(() => {});
   };
 
   const toggleModerationRule = (id: string) => {
+    const target = rules.find(r => r.id === id);
+    if (!target) return;
+    const updated = !target.isActive;
     setRules(prev =>
-      prev.map(r => (r.id === id ? { ...r, isActive: !r.isActive } : r))
+      prev.map(r => (r.id === id ? { ...r, isActive: updated } : r))
     );
+    fetch('/api/admin/moderation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle_rule', ruleData: { id } }),
+    }).catch(() => {});
   };
 
   // Commerce
   const addPackage = (pkg: Omit<PromotionalPackage, 'id' | 'salesCount'>) => {
     const id = 'pkg_' + Math.random().toString(36).substring(2, 7);
-    setPackages(prev => [...prev, { ...pkg, id, salesCount: 0 }]);
+    const newPkg = { ...pkg, id, salesCount: 0 };
+    setPackages(prev => [...prev, newPkg]);
     recordAuditLog('CREATE_COMMERCE_PACKAGE', 'Commerce / Packages', id, pkg.name, `Price: ₹${pkg.price}`);
     addToast({ type: 'success', title: 'Promotional Package Added', message: pkg.name });
+    fetch('/api/boost/packages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newPkg),
+    }).catch(() => {});
   };
 
   const updatePackage = (pkg: PromotionalPackage) => {
     setPackages(prev => prev.map(p => (p.id === pkg.id ? pkg : p)));
     recordAuditLog('UPDATE_COMMERCE_PACKAGE', 'Commerce / Packages', pkg.id, pkg.name, `Price: ₹${pkg.price}`);
     addToast({ type: 'success', title: 'Package Updated', message: pkg.name });
+    fetch(`/api/boost/packages/${pkg.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pkg),
+    }).catch(() => {});
   };
 
   const togglePackageStatus = (id: string) => {
+    const target = packages.find(p => p.id === id);
+    if (!target) return;
+    const updatedStatus = !target.isActive;
     setPackages(prev =>
-      prev.map(p => (p.id === id ? { ...p, isActive: !p.isActive } : p))
+      prev.map(p => (p.id === id ? { ...p, isActive: updatedStatus } : p))
     );
+    fetch(`/api/boost/packages/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: updatedStatus }),
+    }).catch(() => {});
   };
 
   // ==========================================

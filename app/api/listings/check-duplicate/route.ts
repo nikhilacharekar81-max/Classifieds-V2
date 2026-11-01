@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const result = listingService.checkDuplicateTitle(sellerId, title, excludeListingId);
+    const result = await listingService.checkDuplicateTitle(sellerId, title, excludeListingId);
     return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Error checking title' }, { status: 500 });

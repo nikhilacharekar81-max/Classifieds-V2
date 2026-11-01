@@ -164,7 +164,7 @@ export const PostAdPage: React.FC = () => {
   // As-you-type debounced duplicate title check for immediate user feedback
   useEffect(() => {
     if (!postForm.title.trim()) {
-      setTitleError(null);
+      if (titleError !== null) setTitleError(null);
       return;
     }
 

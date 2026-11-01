@@ -16,7 +16,7 @@ export const CmpConsentModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'categories' | 'vendors'>('overview');
 
   useEffect(() => {
-    // Load existing consent from localStorage if present
+    if (!isCmpModalOpen) return;
     const saved = localStorage.getItem('chilly_cmp_consent');
     if (saved) {
       try {
@@ -28,7 +28,7 @@ export const CmpConsentModal: React.FC = () => {
         // ignore error
       }
     }
-  }, []);
+  }, [isCmpModalOpen]);
 
   if (!isCmpModalOpen) return null;
 

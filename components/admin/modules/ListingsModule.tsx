@@ -92,12 +92,14 @@ export const ListingsModule: React.FC<ListingsModuleProps> = ({
 
   // Synchronize initialStatusFilter prop with filter states
   React.useEffect(() => {
-    setTempStatus(initialStatusFilter);
-    setAppliedFilters((prev) => ({
-      ...prev,
-      status: initialStatusFilter,
-    }));
-  }, [initialStatusFilter]);
+    if (tempStatus !== initialStatusFilter) {
+      setTempStatus(initialStatusFilter);
+      setAppliedFilters((prev) => ({
+        ...prev,
+        status: initialStatusFilter,
+      }));
+    }
+  }, [initialStatusFilter, tempStatus]);
 
   // Dialog states
   const [rejectDialog, setRejectDialog] = useState<{ isOpen: boolean; id?: string }>({

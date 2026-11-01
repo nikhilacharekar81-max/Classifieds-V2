@@ -120,7 +120,7 @@ export const UserPanelPage: React.FC = () => {
         gstNumber: currentUser.businessDetails?.gstNumber || '',
       });
     }
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
   // Emails for this user
   const userEmails = React.useMemo(() => {
@@ -138,11 +138,11 @@ export const UserPanelPage: React.FC = () => {
     const featureTargetId = urlParams.get('feature');
     if (featureTargetId) {
       const target = listings.find((l) => l.id === featureTargetId);
-      if (target) {
+      if (target && featureModalListing?.id !== target.id) {
         setFeatureModalListing(target);
       }
     }
-  }, [listings]);
+  }, [listings, featureModalListing?.id]);
 
   // Listings owned by this user
   const userListings = listings.filter((l) => l.sellerId === currentUser.id);

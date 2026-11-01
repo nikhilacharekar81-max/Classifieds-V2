@@ -41,17 +41,17 @@ export const LocalityCombobox: React.FC<LocalityComboboxProps> = ({
   // If city has no predefined localities, default to manual input
   useEffect(() => {
     if (cityLocalities.length === 0) {
-      setIsManualInput(true);
+      if (!isManualInput) setIsManualInput(true);
     } else {
       // If current value is not in cityLocalities and not empty, check if it is a custom locality
       const isPredefined = cityLocalities.some(
         (l) => l.name.toLowerCase() === value.trim().toLowerCase()
       );
-      if (value && !isPredefined) {
+      if (value && !isPredefined && !isManualInput) {
         setIsManualInput(true);
       }
     }
-  }, [cityLocalities, city]);
+  }, [cityLocalities, city, value, isManualInput]);
 
   // Handle click outside to close dropdown
   useEffect(() => {

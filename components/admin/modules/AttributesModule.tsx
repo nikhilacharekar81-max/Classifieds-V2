@@ -40,17 +40,18 @@ export const AttributesModule: React.FC = () => {
   });
 
   useEffect(() => {
-    if (editingField) {
+    const field = editId ? customFields.find((f) => f.id === editId) : null;
+    if (field) {
       setFormData({
-        name: editingField.name,
-        label: editingField.label,
-        type: editingField.type,
-        optionsString: editingField.options ? editingField.options.join(', ') : '',
-        required: editingField.required,
-        unit: editingField.unit || '',
-        filterable: editingField.filterable,
+        name: field.name,
+        label: field.label,
+        type: field.type,
+        optionsString: field.options ? field.options.join(', ') : '',
+        required: field.required,
+        unit: field.unit || '',
+        filterable: field.filterable,
       });
-      setSelectedCatId(editingField.categoryId);
+      setSelectedCatId(field.categoryId);
     } else if (isAddRoute) {
       setFormData({
         name: '',
@@ -62,7 +63,7 @@ export const AttributesModule: React.FC = () => {
         filterable: true,
       });
     }
-  }, [editingField, isAddRoute]);
+  }, [editId, isAddRoute]);
 
   const activeCategory = categories.find((c) => c.id === selectedCatId);
   const activeFields = customFields.filter((f) => f.categoryId === selectedCatId);

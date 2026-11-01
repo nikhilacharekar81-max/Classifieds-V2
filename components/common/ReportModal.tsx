@@ -13,19 +13,12 @@ export const ReportModal: React.FC = () => {
 
   useEffect(() => {
     if (reportModalConfig) {
-      if (reportModalConfig.type === 'user') {
-        setTargetType('user');
-      } else {
-        setTargetType('listing');
-      }
-
-      if (reportModalConfig.targetId) {
-        setTargetId(reportModalConfig.targetId);
-      } else {
-        setTargetId('');
-      }
+      const nextType = reportModalConfig.type === 'user' ? 'user' : 'listing';
+      const nextId = reportModalConfig.targetId || '';
+      if (nextType !== targetType) setTargetType(nextType);
+      if (nextId !== targetId) setTargetId(nextId);
     }
-  }, [reportModalConfig]);
+  }, [reportModalConfig, targetType, targetId]);
 
   if (!reportModalConfig || !reportModalConfig.open) return null;
 

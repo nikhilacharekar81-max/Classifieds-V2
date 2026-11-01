@@ -121,10 +121,10 @@ export const EmailManagementModule: React.FC<EmailManagementModuleProps> = ({
 
   // Sync tab if prop changes
   React.useEffect(() => {
-    if (initialTab) {
+    if (initialTab && initialTab !== activeTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab]);
+  }, [initialTab, activeTab]);
 
   // ==========================================
   // 1. DASHBOARD OVERVIEW METRICS

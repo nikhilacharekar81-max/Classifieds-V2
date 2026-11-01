@@ -147,12 +147,11 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
 
   // Synchronize view mode with active category or search route selection
   React.useEffect(() => {
-    if (effectiveCategory !== 'all' || isSearchRoute) {
-      setActiveViewMode('listings');
-    } else {
-      setActiveViewMode('directory');
+    const targetMode = (effectiveCategory !== 'all' || isSearchRoute) ? 'listings' : 'directory';
+    if (activeViewMode !== targetMode) {
+      setActiveViewMode(targetMode);
     }
-  }, [effectiveCategory, effectiveSubcategory, isSearchRoute]);
+  }, [effectiveCategory, effectiveSubcategory, isSearchRoute, activeViewMode]);
 
   const rootCategories = categories.filter((c) => !c.parentId && c.isActive);
   const activeMainCat = categories.find((c) => c.id === effectiveCategory);

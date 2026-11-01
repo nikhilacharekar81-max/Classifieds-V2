@@ -78,10 +78,10 @@ export const LocationSelectorInput: React.FC<LocationSelectorInputProps> = ({
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
-    } else {
+    } else if (searchQuery !== '') {
       setSearchQuery('');
     }
-  }, [isOpen]);
+  }, [isOpen, searchQuery]);
 
   const states = useMemo(() => locations.filter((loc) => loc.type === 'state'), [locations]);
   const cities = useMemo(() => locations.filter((loc) => loc.type === 'city'), [locations]);

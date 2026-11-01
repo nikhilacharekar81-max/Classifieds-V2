@@ -124,19 +124,20 @@ export const CategoriesModule: React.FC = () => {
   });
 
   useEffect(() => {
-    if (editingCategory) {
+    const category = editId ? categories.find((c) => c.id === editId) : null;
+    if (category) {
       setFormData({
-        name: editingCategory.name,
-        slug: editingCategory.slug,
-        icon: editingCategory.icon,
-        parentId: editingCategory.parentId,
-        order: editingCategory.order,
-        seoTitle: editingCategory.seoTitle || '',
-        seoDescription: editingCategory.seoDescription || '',
-        isActive: editingCategory.isActive,
-        isPaid: !!editingCategory.isPaid,
-        postingFee: editingCategory.postingFee ?? 199,
-        freeListingsQuota: editingCategory.freeListingsQuota ?? 0,
+        name: category.name,
+        slug: category.slug,
+        icon: category.icon,
+        parentId: category.parentId,
+        order: category.order,
+        seoTitle: category.seoTitle || '',
+        seoDescription: category.seoDescription || '',
+        isActive: category.isActive,
+        isPaid: !!category.isPaid,
+        postingFee: category.postingFee ?? 199,
+        freeListingsQuota: category.freeListingsQuota ?? 0,
       });
     } else if (isAddRoute) {
       const activeParent = parentParam || selectedParentId || null;
@@ -154,7 +155,7 @@ export const CategoriesModule: React.FC = () => {
         freeListingsQuota: 0,
       });
     }
-  }, [editingCategory, isAddRoute, categories.length, parentParam, selectedParentId]);
+  }, [editId, isAddRoute, parentParam, selectedParentId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
