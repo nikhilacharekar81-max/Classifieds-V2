@@ -37,7 +37,6 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       user: userObj,
-      sessionId,
     });
 
     response.cookies.set('chillyads_session', sessionId, {

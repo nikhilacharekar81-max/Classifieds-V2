@@ -99,7 +99,7 @@ interface AppContextType {
   bulkRenewListings: (ids: string[], days?: number) => void;
   markListingAsExpired: (id: string) => void;
   sendAdExpiredEmail: (listingId: string) => void;
-  addListing: (listing: Omit<Listing, 'id' | 'createdAt' | 'views' | 'likes' | 'chatsCount'>) => Listing | null;
+  addListing: (listing: Omit<Listing, 'id' | 'createdAt' | 'views' | 'likes' | 'chatsCount'>) => Promise<Listing | null>;
   checkDuplicateTitle: (
     title: string,
     sellerId: string,
@@ -561,23 +561,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     setAuditLogs(prev => [newLog, ...prev]);
   };
 
-  // Role switching
+  // Role switching (Demo Only - does not affect server-side authorization)
   const switchAdminRole = (role: Role) => {
-    const matched = INITIAL_ADMINS.find(a => a.role === role);
-    if (matched) {
-      setCurrentAdmin(matched);
-    } else if (currentAdmin) {
-      setCurrentAdmin({
-        ...currentAdmin,
-        role,
-      });
-    } else {
-      return;
-    }
+    console.warn('switchAdminRole is a demo capability and does not affect server-side permissions.');
     addToast({
       type: 'info',
-      title: `Switched Role to ${role.replace('_', ' ').toUpperCase()}`,
-      message: 'UI permissions and capabilities updated accordingly.',
+      title: `Role Switch Simulated (${role})`,
+      message: 'This is a demo capability. Server-side permissions remain unchanged.',
     });
   };
 
@@ -1275,7 +1265,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     renewListing(id, days, true);
   };
 
-  const addListing = (newListingData: Omit<Listing, 'id' | 'createdAt' | 'views' | 'likes' | 'chatsCount'>): Listing | null => {
+  const addListing = async (newListingData: Omit<Listing, 'id' | 'createdAt' | 'views' | 'likes' | 'chatsCount'>): Promise<Listing | null> => {
     // Check for duplicate title for this seller
     const duplicateCheck = checkDuplicateAdTitle({
       title: newListingData.title,
@@ -1292,38 +1282,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       return null;
     }
 
-    const id = 'lst_' + Math.floor(1000 + Math.random() * 9000);
-    const createdDate = new Date().toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    const created: Listing = {
-      ...newListingData,
-      id,
-      createdAt: createdDate,
-      views: 1,
-      likes: 0,
-      chatsCount: 0,
-    };
-    setListings(prev => [created, ...prev]);
-    recordAuditLog('NEW_LISTING_POSTED', 'Marketplace / Listings', id, created.title, `Submitted with status: ${created.status}`);
-    addToast({
-      type: 'success',
-      title: 'Ad Posted Successfully!',
-      message: created.status === 'approved' ? 'Your ad is live on Chillyads.' : 'Ad submitted for verification in the moderation queue.',
-    });
+    try {
+      // Synchronize with backend API
+      const res = await fetch('/api/listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newListingData),
+      });
 
-    // Synchronize with backend API in background
-    fetch('/api/listings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(created),
-    }).catch(() => {});
+      if (!res.ok) {
+        throw new Error('Failed to create listing');
+      }
 
-    return created;
+      const createdListing: Listing = await res.json();
+      
+      setListings(prev => [createdListing, ...prev]);
+      recordAuditLog('NEW_LISTING_POSTED', 'Marketplace / Listings', createdListing.id, createdListing.title, `Submitted with status: ${createdListing.status}`);
+      addToast({
+        type: 'success',
+        title: 'Ad Posted Successfully!',
+        message: createdListing.status === 'approved' ? 'Your ad is live on Chillyads.' : 'Ad submitted for verification in the moderation queue.',
+      });
+
+      return createdListing;
+    } catch (err) {
+      console.error('Failed to create listing:', err);
+      addToast({
+        type: 'error',
+        title: 'Posting Failed',
+        message: 'There was an error saving your ad.',
+      });
+      return null;
+    }
   };
 
   const checkDuplicateTitle = async (

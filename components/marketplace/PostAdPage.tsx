@@ -290,7 +290,7 @@ export const PostAdPage: React.FC = () => {
 
     const finalImages = postForm.images.slice(0, 5);
 
-    const newAd = addListing({
+    const newAd = await addListing({
       title: postForm.title,
       categoryId: postForm.categoryId,
       subcategoryId: postForm.subcategoryId || undefined,

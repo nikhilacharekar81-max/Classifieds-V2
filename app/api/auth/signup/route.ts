@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanEmail = String(email).toLowerCase().trim();
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters long' }, { status: 400 });
+    if (typeof password !== 'string' || password.length < 6) {
+      return NextResponse.json({ error: 'Password must be a string and at least 6 characters long' }, { status: 400 });
     }
 
     const existing = await userRepository.findByEmail(cleanEmail);
@@ -45,7 +45,6 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         user: userObj,
-        sessionId,
       },
       { status: 201 }
     );
