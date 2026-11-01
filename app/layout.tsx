@@ -8,7 +8,8 @@ import { adminRepository } from '@/server/repositories/admin.repository';
 import { cmsRepository } from '@/server/repositories/cms.repository';
 
 export const metadata: Metadata = {
-  title: 'Classifieds V2 — Leading Verified Marketplace & Classifieds',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://www.chillyads.in'),
+  title: 'Chillyads — Leading Verified Marketplace & Classifieds',
   description:
     'Buy, sell, and discover Cars, Mobiles, Real Estate, Electronics, Jobs, and Local Services with verified sellers, instant chat, and ad boost priority.',
   openGraph: {

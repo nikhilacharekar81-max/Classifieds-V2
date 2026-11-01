@@ -9,8 +9,12 @@ export class LocationRepository {
       id: row.id,
       type: row.type as any,
       name: row.name,
+      slug: row.slug,
+      geoId: row.geoId,
       code: row.code || undefined,
       parentId: row.parentId || null,
+      latitude: row.latitude || undefined,
+      longitude: row.longitude || undefined,
       popular: row.popular,
       listingCount: 0,
     };

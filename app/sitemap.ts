@@ -4,7 +4,7 @@ import { adminService } from '@/server/services/admin.service';
 import { slugify, buildChillyUrl } from '@/lib/utils/seoAndUrlHelper';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://chillyads.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.chillyads.in';
   const now = new Date();
 
   const staticRoutes: MetadataRoute.Sitemap = [

@@ -27,8 +27,11 @@ export async function POST(req: NextRequest) {
 
     const isPrivileged = Boolean(authContext.isModerator || authContext.isSuperAdmin);
 
-    // Admin/Moderator permissions required for approve/reject
-    if ((action === 'approve' || action === 'reject') && !isPrivileged) {
+    const isApproving = action === 'approve' || data?.status === 'approved';
+    const isRejecting = action === 'reject' || data?.status === 'rejected';
+
+    // Admin/Moderator permissions required for approving or rejecting listings
+    if ((isApproving || isRejecting) && !isPrivileged) {
       return NextResponse.json({ error: 'Forbidden: Moderator permission required' }, { status: 403 });
     }
 
@@ -45,13 +48,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (action === 'approve') {
+    if (isApproving) {
       const count = await listingService.bulkApprove(ids);
       return NextResponse.json({ success: true, count });
     }
 
-    if (action === 'reject') {
-      const reason = data?.reason || 'Violates community marketplace guidelines';
+    if (isRejecting) {
+      const reason = data?.reason || data?.rejectionReason || 'Violates community marketplace guidelines';
       const count = await listingService.bulkReject(ids, reason);
       return NextResponse.json({ success: true, count });
     }
@@ -61,8 +64,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, count });
     }
 
-    // Support both 'renew' and 'update' (from frontend callers)
-    if (action === 'renew' || (action === 'update' && (data?.renew || data?.status === 'approved' || data?.action === 'renew'))) {
+    if (action === 'renew' || (action === 'update' && (data?.renew || data?.action === 'renew'))) {
       const days = typeof data?.days === 'number' && data.days > 0 ? data.days : 30;
       const count = await listingService.bulkRenew(ids, days);
       return NextResponse.json({ success: true, count });

@@ -85,7 +85,7 @@ export const ListingMapWidget: React.FC<ListingMapWidgetProps> = ({
       <div className="h-64 sm:h-72 w-full relative">
         <APIProvider apiKey={apiKey} libraries={['marker']}>
           <Map
-            mapId={'bf51a910020fa25a'}
+            mapId={'DEMO_MAP_ID'}
             defaultZoom={12}
             defaultCenter={position}
             gestureHandling={'greedy'}

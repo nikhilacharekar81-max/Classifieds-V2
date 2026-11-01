@@ -84,13 +84,14 @@ export class ListingRepository {
         return this.mapRowToListing(rows[0]);
       }
 
+      // Short ID resolution for canonical short URLs (e.g. lst_2041 matching lst_seeded_cat_mobiles_2041)
       const digitsMatch = cleanId.match(/^lst_(\d+)$/i);
       if (digitsMatch) {
         const suffix = `_${digitsMatch[1]}`;
         const fallbackRows = await db
           .select()
           .from(schema.listings)
-          .where(ilike(schema.listings.id, `%${suffix}`))
+          .where(sql`${schema.listings.id} LIKE ${'%' + suffix}`)
           .limit(1);
         if (fallbackRows.length > 0) {
           return this.mapRowToListing(fallbackRows[0]);
@@ -117,7 +118,7 @@ export class ListingRepository {
     try {
       const conditions = [
         eq(schema.listings.sellerId, sellerId),
-        sql`LOWER(REGEXP_REPLACE(TRIM(${schema.listings.title}), '\\s+', ' ', 'g')) = ${normalized}`,
+        sql`LOWER(REGEXP_REPLACE(TRIM(${schema.listings.title}), '\s+', ' ', 'g')) = ${normalized}`,
         notInArray(schema.listings.status, ['sold', 'expired']),
       ];
 

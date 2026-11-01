@@ -629,7 +629,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
   const featureListing = (id: string, isFeatured: boolean) => {
     const item = listings.find(l => l.id === id);
     if (!item) return;
-    const featuredUntil = isFeatured ? '2026-10-30' : undefined;
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 30);
+    const featuredUntil = isFeatured ? futureDate.toISOString().split('T')[0] : undefined;
     setListings(prev =>
       prev.map(l =>
         l.id === id

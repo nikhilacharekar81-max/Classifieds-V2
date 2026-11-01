@@ -155,7 +155,7 @@ export class ListingService {
       }
     }
 
-    // Field allowlist: regular sellers cannot change sensitive moderation or boost flags
+    // Field allowlist: regular sellers can edit content, mark as sold, or renew
     const safeFields: any = {};
     if (updatedData.title !== undefined) safeFields.title = updatedData.title;
     if (updatedData.description !== undefined) safeFields.description = updatedData.description;
@@ -166,17 +166,32 @@ export class ListingService {
       if (updatedData.location.city) safeFields.city = updatedData.location.city;
       if (updatedData.location.state) safeFields.state = updatedData.location.state;
       if (updatedData.location.locality) safeFields.locality = updatedData.location.locality;
-      if (updatedData.location.latitude !== undefined && updatedData.location.latitude !== null) {
-        safeFields.latitude = updatedData.location.latitude;
+      if (updatedData.location.latitude !== undefined) {
+        safeFields.latitude = updatedData.location.latitude !== null ? Number(updatedData.location.latitude) : null;
       }
-      if (updatedData.location.longitude !== undefined && updatedData.location.longitude !== null) {
-        safeFields.longitude = updatedData.location.longitude;
+      if (updatedData.location.longitude !== undefined) {
+        safeFields.longitude = updatedData.location.longitude !== null ? Number(updatedData.location.longitude) : null;
+      }
+    }
+
+    // Sellers can mark as sold or renew expiresAt
+    if (!isAdmin) {
+      if (updatedData.status === 'sold') {
+        safeFields.status = 'sold';
+      } else if (existing.status === 'approved' && (updatedData.title || updatedData.description || updatedData.price || updatedData.images)) {
+        // Reset approved ad to pending when key content is edited by seller
+        safeFields.status = 'pending';
+      }
+
+      if (updatedData.expiresAt) {
+        safeFields.expiresAt = new Date(updatedData.expiresAt);
       }
     }
 
     // Admin-only fields
     if (isAdmin) {
       if (updatedData.status !== undefined) safeFields.status = updatedData.status;
+      if (updatedData.expiresAt !== undefined) safeFields.expiresAt = new Date(updatedData.expiresAt);
       if (updatedData.rejectionReason !== undefined) safeFields.rejectionReason = updatedData.rejectionReason;
       if (updatedData.isFeatured !== undefined) safeFields.isFeatured = updatedData.isFeatured;
       if (updatedData.isBoosted !== undefined) safeFields.isBoosted = updatedData.isBoosted;

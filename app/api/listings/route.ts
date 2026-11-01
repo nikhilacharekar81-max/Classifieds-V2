@@ -74,26 +74,50 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
+    // Validate title
+    if (!body.title || typeof body.title !== 'string' || body.title.trim().length < 3) {
+      return NextResponse.json({ error: 'Title is required and must be at least 3 characters long' }, { status: 400 });
+    }
+    if (body.title.trim().length > 120) {
+      return NextResponse.json({ error: 'Title cannot exceed 120 characters' }, { status: 400 });
+    }
+
+    // Validate categoryId
+    if (!body.categoryId || typeof body.categoryId !== 'string') {
+      return NextResponse.json({ error: 'Category ID is required' }, { status: 400 });
+    }
+
+    // Validate description
+    const rawDescription = String(body.description || '').trim();
+    if (rawDescription.length > 5000) {
+      return NextResponse.json({ error: 'Description cannot exceed 5000 characters' }, { status: 400 });
+    }
+
     // Validate price
     const priceNum = Number(body.price);
     if (isNaN(priceNum) || !isFinite(priceNum) || priceNum < 0) {
       return NextResponse.json({ error: 'Price must be a valid non-negative number' }, { status: 400 });
     }
 
+    // Sanitize image URLs array
+    const validImages = Array.isArray(body.images)
+      ? body.images.filter((img: any) => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://'))).slice(0, 5)
+      : [];
+
     // Strip sensitive fields that sellers cannot assign to themselves
     const safePayload: any = {
-      title: body.title,
-      description: body.description,
+      title: body.title.trim(),
+      description: rawDescription,
       price: priceNum,
-      categoryId: body.categoryId,
-      subcategoryId: body.subcategoryId || undefined,
+      categoryId: body.categoryId.trim(),
+      subcategoryId: body.subcategoryId ? String(body.subcategoryId).trim() : undefined,
       location: body.location || {
         city: body.city || 'Mumbai',
         state: body.state || 'Maharashtra',
         locality: body.locality || 'Locality',
       },
-      images: Array.isArray(body.images) ? body.images.slice(0, 5) : [],
-      customAttributes: body.customAttributes || {},
+      images: validImages,
+      customAttributes: body.customAttributes && typeof body.customAttributes === 'object' ? body.customAttributes : {},
       sellerName: authContext.user.name,
       sellerPhone: authContext.user.phone || body.sellerPhone || '',
       sellerId: authContext.userId, // Derived strictly from verified session
