@@ -36,7 +36,7 @@ export default async function RootLayout({
   let initialServerData = undefined;
   try {
     const [listingsResult, categories, locations, settings, cmsPages] = await Promise.all([
-      listingRepository.findMarketplaceListings({ status: 'approved', limit: 30 }),
+      listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
       categoryRepository.findAll(),
       locationRepository.findAll(),
       adminRepository.getSystemSettings(),

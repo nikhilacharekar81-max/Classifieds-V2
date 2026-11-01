@@ -214,6 +214,8 @@ interface AppContextType {
   userLocation: UserGeoLocation | null;
   setUserLocation: (loc: UserGeoLocation | null) => void;
   fetchGpsLocation: () => void;
+  signOut: () => Promise<void>;
+  refreshData: () => Promise<void>;
 }
 
 export interface InitialServerData {
@@ -489,38 +491,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
     }
   }, [theme]);
 
-  // Synchronize state with PostgreSQL backend on mount via /api/bootstrap
-  useEffect(() => {
-    const syncDataWithServer = async () => {
-      try {
-        const res = await fetch('/api/bootstrap');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.listings)) {
-            setListings(data.listings);
-          }
-          if (Array.isArray(data.categories) && data.categories.length > 0) {
-            setCategories(data.categories);
-          }
-          if (Array.isArray(data.locations) && data.locations.length > 0) {
-            setLocations(data.locations);
-          }
-          if (Array.isArray(data.cmsPages)) {
-            setCmsPages(data.cmsPages);
-          }
-          if (data.settings) {
-            setSettings((prev) => ({ ...prev, ...data.settings }));
-          }
-          if (data.currentUser) {
-            setActiveUserId(data.currentUser.id);
-          }
+  // Manual or programmatic data refresh from PostgreSQL backend via /api/bootstrap
+  const refreshData = async () => {
+    try {
+      const res = await fetch('/api/bootstrap', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.listings)) {
+          setListings(data.listings);
         }
-      } catch (err) {
-        console.error('Failed to sync bootstrap data with backend:', err);
+        if (Array.isArray(data.categories) && data.categories.length > 0) {
+          setCategories(data.categories);
+        }
+        if (Array.isArray(data.locations) && data.locations.length > 0) {
+          setLocations(data.locations);
+        }
+        if (Array.isArray(data.cmsPages)) {
+          setCmsPages(data.cmsPages);
+        }
+        if (data.settings) {
+          setSettings((prev) => ({ ...prev, ...data.settings }));
+        }
+        if (data.currentUser) {
+          setActiveUserId(data.currentUser.id);
+        }
       }
-    };
-    syncDataWithServer();
-  }, []);
+    } catch (err) {
+      console.error('Failed to sync bootstrap data with backend:', err);
+    }
+  };
+
+  // Synchronize state with PostgreSQL backend on mount via /api/bootstrap (only if SSR data was not provided)
+  useEffect(() => {
+    if (initialServerData?.listings && initialServerData.listings.length > 0) {
+      return;
+    }
+    refreshData();
+  }, [initialServerData]);
 
   // Toast manager
   const addToast = (toast: Omit<ToastMessage, 'id'>) => {
@@ -916,6 +923,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       message: `"${newTemplate.name}" added successfully.`,
     });
     return newTemplate;
+  };
+
+  const signOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      setAuthUser(null);
+      setCurrentAdmin(null);
+      setActiveUserId(null);
+      addToast({ type: 'info', title: 'Signed Out', message: 'You have been signed out.' });
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
   };
 
   const updateEmailTemplate = (updated: EmailTemplate) => {
@@ -1744,12 +1764,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
       return changed ? updated : prev;
     });
 
-    // Notify backend server cleanup if available
-    fetch('/api/boost/cleanup-expired', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nowMs: now }),
-    }).catch(() => {});
+    // Notify backend server cleanup if in browser and available
+    if (typeof window !== 'undefined') {
+      fetch('/api/boost/cleanup-expired', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nowMs: now }),
+      }).catch(() => {});
+    }
   };
 
   // Periodic automatic cleanup of expired boosts
@@ -2012,6 +2034,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
         userLocation,
         setUserLocation,
         fetchGpsLocation,
+        signOut,
         cmsPages,
         updateCmsPage,
         addCmsPage,
@@ -2032,6 +2055,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialServerDat
         isEeatModalOpen,
         openEeatModal,
         closeEeatModal,
+        refreshData,
       }}
     >
       {children}

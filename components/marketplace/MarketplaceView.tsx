@@ -97,6 +97,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
     setMarketplaceSearch,
     addToast,
     userLocation,
+    signOut,
   } = useApp();
 
   // Synchronously derive route state for SSR & hydration consistency
@@ -474,6 +475,14 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 <span className="hidden sm:inline">My Account</span>
               </a>
 
+              <button
+                onClick={() => signOut()}
+                className="px-3 py-2 text-slate-800 hover:text-rose-600 font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300 rounded-xl hover:bg-slate-100"
+                title="Sign Out"
+              >
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+
               <a
                 href="/post"
                 onClick={(e) => {
@@ -585,6 +594,16 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 >
                   <User className="w-4 h-4 text-emerald-600" />
                   <span>My Account & Saved Ads</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    signOut();
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-100 flex items-center gap-3 transition-colors cursor-pointer"
+                >
+                  <span className="w-4 h-4" />
+                  <span>Sign Out</span>
                 </button>
 
                 <button

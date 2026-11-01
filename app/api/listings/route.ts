@@ -3,6 +3,8 @@ import { listingService } from '@/server/services/listing.service';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 import { toPublicListingDTO } from '@/lib/utils/seoAndUrlHelper';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const city = searchParams.get('city') || undefined;
@@ -20,7 +22,7 @@ export async function GET(req: NextRequest) {
   const maxPrice = rawMax !== null && !isNaN(Number(rawMax)) && isFinite(Number(rawMax)) && Number(rawMax) >= 0 ? Number(rawMax) : undefined;
 
   const rawLimit = searchParams.get('limit');
-  const limit = rawLimit !== null && !isNaN(Number(rawLimit)) ? Math.min(Math.max(Number(rawLimit) || 20, 1), 100) : 20;
+  const limit = rawLimit !== null && !isNaN(Number(rawLimit)) ? Math.min(Math.max(Number(rawLimit) || 20, 1), 500) : 20;
 
   const rawOffset = searchParams.get('offset');
   const offset = rawOffset !== null && !isNaN(Number(rawOffset)) ? Math.max(Number(rawOffset) || 0, 0) : 0;
@@ -53,16 +55,25 @@ export async function GET(req: NextRequest) {
     offset,
   });
 
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+  };
+
   // Strip internal fields for public DTO responses unless requested by owner or admin
   const isOwner = Boolean(authContext?.userId && sellerId === authContext.userId);
   if (!isPrivileged && !isOwner) {
-    return NextResponse.json({
-      items: result.items.map((item) => toPublicListingDTO(item)),
-      total: result.total,
-    });
+    return NextResponse.json(
+      {
+        items: result.items.map((item) => toPublicListingDTO(item)),
+        total: result.total,
+      },
+      { headers: noCacheHeaders }
+    );
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(result, { headers: noCacheHeaders });
 }
 
 export async function POST(req: NextRequest) {

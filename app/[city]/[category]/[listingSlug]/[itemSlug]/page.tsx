@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
 import { listingRepository } from '@/server/repositories/listing.repository';
-import { categoryRepository } from '@/server/repositories/category.repository';
-import { locationRepository } from '@/server/repositories/location.repository';
 import { stripChillySuffixes } from '@/lib/utils/seoAndUrlHelper';
 import { AppClientRouter } from '@/components/AppClientRouter';
 import { notFound } from 'next/navigation';
@@ -69,12 +67,7 @@ export default async function FourSegmentListingPage({ params }: FourSegmentList
     notFound();
   }
 
-  const [listing, listingsData, categories, locations] = await Promise.all([
-    listingRepository.findById(itemId),
-    listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
-    categoryRepository.findAll(),
-    locationRepository.findAll(),
-  ]);
+  const listing = await listingRepository.findById(itemId);
 
   if (!listing || listing.status !== 'approved') {
     notFound();
@@ -108,11 +101,6 @@ export default async function FourSegmentListingPage({ params }: FourSegmentList
       <AppClientRouter
         initialPath={`/${city}/${category}/${listingSlug}/${itemSlug}`}
         initialListing={listing}
-        initialServerData={{
-          listings: listingsData.items,
-          categories,
-          locations,
-        }}
       />
     </>
   );

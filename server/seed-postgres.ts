@@ -67,26 +67,6 @@ export async function seedPostgres() {
 
   // 2. Categories: Insert parents first, then children
   console.log('Seeding categories...');
-  // Ensure alias categories exist
-  const aliasCats = [
-    { id: 'cat_vehicles', name: 'Vehicles', slug: 'vehicles', icon: 'Car' },
-    { id: 'cat_buy_and_sell', name: 'Buy & Sell', slug: 'buy-and-sell', icon: 'ShoppingBag' },
-    { id: 'cat_pets_animals', name: 'Pets & Animals', slug: 'pets-and-animals', icon: 'Dog' },
-  ];
-  for (const ac of aliasCats) {
-    await db.insert(schema.categories).values({
-      id: ac.id,
-      name: ac.name,
-      slug: ac.slug,
-      icon: ac.icon,
-      parentId: null,
-      orderIndex: 0,
-      isActive: true,
-      isPaid: false,
-      postingFee: '0.00',
-      freeListingsQuota: 3,
-    }).onConflictDoNothing();
-  }
 
   for (const c of INITIAL_CATEGORIES) {
     await db.insert(schema.categories).values({

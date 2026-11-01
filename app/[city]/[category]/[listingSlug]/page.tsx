@@ -96,12 +96,6 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
 
   const { itemId, cleanSlug: cleanThirdSlug } = stripChillySuffixes(listingSlug);
 
-  const [listingsData, categories, locations] = await Promise.all([
-    listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
-    categoryRepository.findAll(),
-    locationRepository.findAll(),
-  ]);
-
   if (itemId) {
     const listing = await listingRepository.findById(itemId);
     if (!listing || listing.status !== 'approved') {
@@ -136,15 +130,15 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
         <AppClientRouter
           initialPath={`/${city}/${category}/${listingSlug}`}
           initialListing={listing}
-          initialServerData={{
-            listings: listingsData.items,
-            categories,
-            locations,
-          }}
         />
       </>
     );
   }
+
+  const [categories, locations] = await Promise.all([
+    categoryRepository.findAll(),
+    locationRepository.findAll(),
+  ]);
 
   const matchedSubCat =
     categories.find((c) => c.slug === cleanThirdSlug || c.slug === listingSlug) ||
@@ -201,11 +195,6 @@ export default async function ListingHierarchicalPage({ params, searchParams }: 
       <AppClientRouter
         initialPath={`/${city}/${category}/${listingSlug}`}
         initialQuery={cleanQuery}
-        initialServerData={{
-          listings: listingsData.items,
-          categories,
-          locations,
-        }}
       />
     </>
   );

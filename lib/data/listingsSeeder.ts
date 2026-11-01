@@ -621,6 +621,68 @@ const CATEGORY_TEMPLATES: Record<string, SeedTemplate[]> = {
       ],
     },
   ],
+  cat_housing_realestate: [
+    {
+      subcategoryId: 'sub_house_apt_sale',
+      titles: [
+        'Luxury 3 BHK Sea View Apartment in Bandra West',
+        'Modern 2 BHK Gated Community Flat in Koregaon Park',
+        'Independent 4 BHK Villa with Private Swimming Pool',
+        'Penthouse Apartment with Wrap-Around Terrace',
+      ],
+      descriptions: [
+        'Expansive carpet area with panoramic views, Vastu compliant layout, Italian marble flooring, 2 covered parking slots.',
+        'East facing apartment with modular kitchen, gym, swimming pool, and 24x7 security.',
+        'Luxurious independent villa featuring private garden, Italian fittings, servant quarters, and clubhouse access.',
+        'Spacious duplex penthouse with private sky deck, solar backup, and high-speed elevator access.',
+      ],
+      prices: [42500000, 9800000, 32000000, 27500000],
+      images: [
+        ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&auto=format&fit=crop&q=80'],
+        ['https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&auto=format&fit=crop&q=80'],
+        ['https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop&q=80'],
+        ['https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&auto=format&fit=crop&q=80'],
+      ],
+    },
+    {
+      subcategoryId: 'sub_house_apt_rent',
+      titles: [
+        'Furnished 2 BHK Apartment for Rent in Indiranagar',
+        'Spacious 1 BHK Flat for Rent in South Extension Delhi',
+        '3 BHK Executive Flat in Hiranandani Gardens Powai',
+      ],
+      descriptions: [
+        'Tastefully furnished home with all appliances, modular kitchen, fiber internet, and covered car parking.',
+        'Sunlit flat with terrace garden, 24-hour water supply, and walking distance to metro station.',
+        'Premium gated township with clubhouse, sports courts, international school, and hospital within campus.',
+      ],
+      prices: [45000, 22000, 75000],
+      images: [
+        ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80'],
+        ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&auto=format&fit=crop&q=80'],
+        ['https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&auto=format&fit=crop&q=80'],
+      ],
+    },
+    {
+      subcategoryId: 'sub_shops_offices_sale',
+      titles: [
+        'Prime Commercial Corner Retail Shop in Connaught Place',
+        'Plug & Play IT Office Space in Whitefield',
+        'High Footfall Commercial Showroom on Main Road',
+      ],
+      descriptions: [
+        'Ground floor retail shop with high footfall frontage, suitable for boutique, cafe, or electronics showroom.',
+        'Fully furnished 40-workstation commercial office with conference room, cabins, cafeteria, and DG backup.',
+        'Spacious multi-level commercial showroom with glass facade, parking for 15 cars, and all approvals.',
+      ],
+      prices: [18500000, 17500000, 29000000],
+      images: [
+        ['https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&auto=format&fit=crop&q=80'],
+        ['https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=800&auto=format&fit=crop&q=80'],
+        ['https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&auto=format&fit=crop&q=80'],
+      ],
+    },
+  ],
 };
 
 const SELLER_ACCOUNTS = [

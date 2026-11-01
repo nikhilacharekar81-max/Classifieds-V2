@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { locationRepository } from '@/server/repositories/location.repository';
 import { categoryRepository } from '@/server/repositories/category.repository';
-import { listingRepository } from '@/server/repositories/listing.repository';
 import { AppClientRouter } from '@/components/AppClientRouter';
 import { stripChillySuffixes, unslugifyCity, serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 
@@ -65,9 +64,7 @@ export default async function CityPage({ params, searchParams }: CityPageProps) 
 
   const { cleanSlug } = stripChillySuffixes(city);
 
-  const [listingsData, categories, locations, loc, cat] = await Promise.all([
-    listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
-    categoryRepository.findAll(),
+  const [locations, loc, cat] = await Promise.all([
     locationRepository.findAll(),
     locationRepository.findBySlug(cleanSlug).then((r) => r || locationRepository.findBySlug(city)),
     categoryRepository.findBySlug(cleanSlug).then((r) => r || categoryRepository.findBySlug(city)),
@@ -108,11 +105,6 @@ export default async function CityPage({ params, searchParams }: CityPageProps) 
       <AppClientRouter
         initialPath={`/${city}`}
         initialQuery={cleanQuery}
-        initialServerData={{
-          listings: listingsData.items,
-          categories,
-          locations,
-        }}
       />
     </>
   );

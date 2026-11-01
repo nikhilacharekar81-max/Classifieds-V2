@@ -3,14 +3,22 @@ import { listingService } from '@/server/services/listing.service';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 import { toPublicListingDTO } from '@/lib/utils/seoAndUrlHelper';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+  };
+
   const listing = await listingService.getListingById(id);
   if (!listing) {
-    return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Listing not found' }, { status: 404, headers: noCacheHeaders });
   }
 
   const authContext = await getAuthenticatedUser(req);
@@ -22,16 +30,16 @@ export async function GET(
 
   if (listing.status !== 'approved' || isExpired) {
     if (!isOwner && !isPrivileged) {
-      return NextResponse.json({ error: 'Listing not found or expired' }, { status: 404 });
+      return NextResponse.json({ error: 'Listing not found or expired' }, { status: 404, headers: noCacheHeaders });
     }
   }
 
   // Strip internal fields for public responses unless caller is owner or privileged admin
   if (!isOwner && !isPrivileged) {
-    return NextResponse.json(toPublicListingDTO(listing));
+    return NextResponse.json(toPublicListingDTO(listing), { headers: noCacheHeaders });
   }
 
-  return NextResponse.json(listing);
+  return NextResponse.json(listing, { headers: noCacheHeaders });
 }
 
 export async function PUT(

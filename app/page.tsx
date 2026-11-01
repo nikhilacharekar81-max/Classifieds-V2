@@ -1,7 +1,4 @@
 import { AppClientRouter } from '@/components/AppClientRouter';
-import { listingRepository } from '@/server/repositories/listing.repository';
-import { categoryRepository } from '@/server/repositories/category.repository';
-import { locationRepository } from '@/server/repositories/location.repository';
 import { serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 import type { Metadata } from 'next';
 
@@ -21,13 +18,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function HomePage() {
-  const [listingsData, categories, locations] = await Promise.all([
-    listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
-    categoryRepository.findAll(),
-    locationRepository.findAll(),
-  ]);
-
+export default function HomePage() {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -55,14 +46,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
-      <AppClientRouter
-        initialPath="/"
-        initialServerData={{
-          listings: listingsData.items,
-          categories,
-          locations,
-        }}
-      />
+      <AppClientRouter initialPath="/" />
     </>
   );
 }

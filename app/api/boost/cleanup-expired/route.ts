@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { boostService } from '@/server/services/boost.service';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     // Authorized administrator or internal cron secret required

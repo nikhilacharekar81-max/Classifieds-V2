@@ -1,7 +1,6 @@
 import { AppClientRouter } from '@/components/AppClientRouter';
 import { listingRepository } from '@/server/repositories/listing.repository';
 import { categoryRepository } from '@/server/repositories/category.repository';
-import { locationRepository } from '@/server/repositories/location.repository';
 import { buildChillyUrl, serializeJsonLd } from '@/lib/utils/seoAndUrlHelper';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -53,12 +52,7 @@ export default async function ItemDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [listing, listingsData, categories, locations] = await Promise.all([
-    listingRepository.findById(id),
-    listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
-    categoryRepository.findAll(),
-    locationRepository.findAll(),
-  ]);
+  const listing = await listingRepository.findById(id);
 
   if (!listing || listing.status !== 'approved') {
     notFound();
@@ -92,11 +86,6 @@ export default async function ItemDetailPage({
       <AppClientRouter
         initialPath={`/item/${id}`}
         initialListing={listing}
-        initialServerData={{
-          listings: listingsData.items,
-          categories,
-          locations,
-        }}
       />
     </>
   );

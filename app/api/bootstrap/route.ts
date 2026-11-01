@@ -9,6 +9,8 @@ import { userRepository } from '@/server/repositories/user.repository';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 import { toPublicListingDTO } from '@/lib/utils/seoAndUrlHelper';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const authContext = await getAuthenticatedUser(req);
@@ -30,7 +32,7 @@ export async function GET(req: NextRequest) {
       boostRepository.findAllPackages(),
       adminRepository.getSystemSettings(),
       cmsRepository.findAllPages(),
-      listingRepository.findMarketplaceListings({ limit: 20 }),
+      listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
       authContext?.isAdmin ? userRepository.findAll() : Promise.resolve([]),
     ]);
 
@@ -42,22 +44,39 @@ export async function GET(req: NextRequest) {
       ? listingsData.items
       : listingsData.items.map((l) => toPublicListingDTO(l));
 
-    return NextResponse.json({
-      categories,
-      customFields,
-      locations,
-      packages,
-      settings,
-      cmsPages,
-      listings: publicListings,
-      totalListings: listingsData.total,
-      users,
-      currentUser: authContext?.user || null,
-      adminRole: authContext?.adminRole || null,
-    });
+    return NextResponse.json(
+      {
+        categories,
+        customFields,
+        locations,
+        packages,
+        settings,
+        cmsPages,
+        listings: publicListings,
+        totalListings: listingsData.total,
+        users,
+        currentUser: authContext?.user || null,
+        adminRole: authContext?.adminRole || null,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (error: any) {
     console.error('API /api/bootstrap error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to bootstrap application data' }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || 'Failed to bootstrap application data' },
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
+      }
+    );
   }
 }
 

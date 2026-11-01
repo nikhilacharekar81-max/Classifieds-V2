@@ -246,9 +246,9 @@ export class ListingRepository {
           desc(schema.listings.createdAt)
         );
 
-      // Numeric bounds: Limit capped at [1, 100], Offset >= 0
+      // Numeric bounds: Limit capped at [1, 500], Offset >= 0
       const limitVal = options.limit !== undefined && !isNaN(Number(options.limit))
-        ? Math.min(Math.max(Number(options.limit) || 20, 1), 100)
+        ? Math.min(Math.max(Number(options.limit) || 20, 1), 500)
         : 20;
       const offsetVal = options.offset !== undefined && !isNaN(Number(options.offset))
         ? Math.max(Number(options.offset) || 0, 0)

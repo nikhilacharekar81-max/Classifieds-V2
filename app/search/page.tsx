@@ -1,7 +1,4 @@
 import { AppClientRouter } from '@/components/AppClientRouter';
-import { listingRepository } from '@/server/repositories/listing.repository';
-import { categoryRepository } from '@/server/repositories/category.repository';
-import { locationRepository } from '@/server/repositories/location.repository';
 import type { Metadata } from 'next';
 
 interface SearchPageProps {
@@ -36,21 +33,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     if (typeof v === 'string') cleanQuery[k] = v;
   }
 
-  const [listingsData, categories, locations] = await Promise.all([
-    listingRepository.findMarketplaceListings({ status: 'approved', limit: 500 }),
-    categoryRepository.findAll(),
-    locationRepository.findAll(),
-  ]);
-
   return (
     <AppClientRouter
       initialPath="/search"
       initialQuery={cleanQuery}
-      initialServerData={{
-        listings: listingsData.items,
-        categories,
-        locations,
-      }}
     />
   );
 }
